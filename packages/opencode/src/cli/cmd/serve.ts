@@ -3,6 +3,8 @@ import { effectCmd } from "../effect-cmd"
 import { withNetworkOptions, resolveNetworkOptions } from "../network"
 import { Flag } from "@opencode-ai/core/flag/flag"
 
+import { printPairingInfo } from "../qr"
+
 export const ServeCommand = effectCmd({
   command: "serve",
   builder: (yargs) => withNetworkOptions(yargs),
@@ -20,11 +22,13 @@ export const ServeCommand = effectCmd({
     }
     const opts = yield* resolveNetworkOptions(args)
     const server = yield* Effect.promise(() => Server.listen(opts))
-    if (opts.socket) {
-      console.log(`opencode server listening on unix:${opts.socket}`)
-    } else {
-      console.log(`opencode server listening on http://${server.hostname}:${server.port}`)
-    }
+    yield* Effect.promise(() =>
+      printPairingInfo({
+        port: server.port,
+        socket: opts.socket,
+        password: process.env.OPENCODE_SERVER_PASSWORD,
+      }),
+    )
 
     yield* Effect.never
   }),

@@ -28,6 +28,8 @@ function getNetworkIPs() {
   return results
 }
 
+import { printPairingInfo } from "../qr"
+
 export const WebCommand = effectCmd({
   command: "web",
   builder: (yargs) => withNetworkOptions(yargs),
@@ -38,46 +40,24 @@ export const WebCommand = effectCmd({
   handler: Effect.fn("Cli.web")(function* (args) {
     const { Server } = yield* Effect.promise(() => import("../../server/server"))
     if (!Flag.OPENCODE_SERVER_PASSWORD) {
-      UI.println(UI.Style.TEXT_WARNING_BOLD + "!  OPENCODE_SERVER_PASSWORD is not set; server is unsecured.")
+      const generatedPassword = crypto.randomUUID().replace(/-/g, "").slice(0, 16)
+      process.env.OPENCODE_SERVER_PASSWORD = generatedPassword
+      UI.println(UI.Style.TEXT_SUCCESS_BOLD + `🔒 OPENCODE_SERVER_PASSWORD was not set. Generated password: ${generatedPassword}`)
     }
     const opts = yield* resolveNetworkOptions(args)
     const server = yield* Effect.promise(() => Server.listen(opts))
     UI.empty()
     UI.println(UI.logo("  "))
-    UI.empty()
 
-    if (opts.hostname === "0.0.0.0") {
-      // Show localhost for local access
-      const localhostUrl = `http://localhost:${server.port}`
-      UI.println(UI.Style.TEXT_INFO_BOLD + "  Local access:      ", UI.Style.TEXT_NORMAL, localhostUrl)
+    yield* Effect.promise(() =>
+      printPairingInfo({
+        port: server.port,
+        password: process.env.OPENCODE_SERVER_PASSWORD,
+      }),
+    )
 
-      // Show network IPs for remote access
-      const networkIPs = getNetworkIPs()
-      if (networkIPs.length > 0) {
-        for (const ip of networkIPs) {
-          UI.println(
-            UI.Style.TEXT_INFO_BOLD + "  Network access:    ",
-            UI.Style.TEXT_NORMAL,
-            `http://${ip}:${server.port}`,
-          )
-        }
-      }
-
-      if (opts.mdns) {
-        UI.println(
-          UI.Style.TEXT_INFO_BOLD + "  mDNS:              ",
-          UI.Style.TEXT_NORMAL,
-          `${opts.mdnsDomain}:${server.port}`,
-        )
-      }
-
-      // Open localhost in browser
-      open(localhostUrl).catch(() => {})
-    } else {
-      const displayUrl = server.url.toString()
-      UI.println(UI.Style.TEXT_INFO_BOLD + "  Web interface:    ", UI.Style.TEXT_NORMAL, displayUrl)
-      open(displayUrl).catch(() => {})
-    }
+    const localhostUrl = `http://localhost:${server.port}`
+    open(localhostUrl).catch(() => {})
 
     yield* Effect.never
   }),

@@ -8,6 +8,7 @@ and this project adheres to [Calendar Versioning](https://calver.org/) (`vYY.MM.
 ## [v26.08.30.15614] - 2026-08-30
 
 ### Added
+- Terminal QR code pairing and Tailscale auto-detection (`qr.ts`), encoding credentials into camera-scannable QR for instant PWA onboarding.
 - Enforced mandatory password protection on HTTP server (`serve.ts`), auto-generating a secure random password when `OPENCODE_SERVER_PASSWORD` is unconfigured.
 - Built-in `opencode update` CLI command to pull latest git commits, rebuild binary, and restart the background daemon.
 - Built-in `delegate` tool (`@opencode-ai/core/tool/delegate`) enabling OpenCode agents to send messages, delegate tasks across sessions, and orchestrate subagent execution.
