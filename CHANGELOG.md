@@ -8,6 +8,7 @@ and this project adheres to [Calendar Versioning](https://calver.org/) (`vYY.MM.
 ## [v26.08.30.15614] - 2026-08-30
 
 ### Added
+- Remote Repo Spawning via built-in `repo_clone` tool (`@opencode-ai/core/tool/clone`) and `opencode clone <repo> [prompt]` CLI command.
 - Built-in `git_diff` tool (`@opencode-ai/core/tool/git-diff`) to inspect working-tree changes, unified diffs, and diffstats.
 - Ping-Pong Loop Guard in `delegate` tool preventing runaway agent loops (>10 autonomous delegations without human input).
 - User Presence Suppression in `ntfy` module (skips push alerts when user is actively typing/working at their machine).

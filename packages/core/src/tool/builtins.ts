@@ -4,6 +4,7 @@ import { makeLocationNode } from "../effect/app-node"
 import { Layer } from "effect"
 import { BashTool } from "./bash"
 import { ApplyPatchTool } from "./apply-patch"
+import { CloneTool } from "./clone"
 import { DelegateTool } from "./delegate"
 import { EditTool } from "./edit"
 import { GitDiffTool } from "./git-diff"
@@ -36,6 +37,7 @@ export const node = makeLocationNode({
   deps: [
     ApplyPatchTool.node,
     BashTool.node,
+    CloneTool.node,
     DelegateTool.node,
     EditTool.node,
     GitDiffTool.node,
