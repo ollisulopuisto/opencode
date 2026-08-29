@@ -4,6 +4,7 @@ import { UI } from "@/cli/ui"
 import { errorMessage } from "@opencode-ai/tui/util/error"
 import { validateSession } from "../tui/validate-session"
 import { ServerAuth } from "@/server/auth"
+import { Flag } from "@opencode-ai/core/flag/flag"
 
 export const AttachCommand = cmd({
   command: "attach [url]",
@@ -96,6 +97,10 @@ export const AttachCommand = cmd({
       } catch {}
       return root
     })()
+
+    if (Flag.OPENCODE_DEBUG) {
+      console.error(`[attach-debug] targetUrl: ${targetUrl} | callerDir: ${callerDir} | PWD: ${process.env.PWD} | cwd: ${process.cwd()} | directory: ${directory}`)
+    }
 
     if (args.mini) {
       const { runMini } = await import("./run")

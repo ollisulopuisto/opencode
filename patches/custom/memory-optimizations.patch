@@ -1,40 +1,78 @@
+diff --git a/packages/core/src/flag/flag.ts b/packages/core/src/flag/flag.ts
+index 5c3107f89..d56d2a570 100644
+--- a/packages/core/src/flag/flag.ts
++++ b/packages/core/src/flag/flag.ts
+@@ -95,4 +95,7 @@ export const Flag = {
+   get OPENCODE_CLIENT() {
+     return process.env["OPENCODE_CLIENT"] ?? "cli"
+   },
++  get OPENCODE_DEBUG() {
++    return truthy("OPENCODE_DEBUG")
++  },
+ }
 diff --git a/packages/opencode/src/cli/cmd/attach.ts b/packages/opencode/src/cli/cmd/attach.ts
-index f70be1333..bb1f87ad4 100644
+index bb1f87ad4..045bf0577 100644
 --- a/packages/opencode/src/cli/cmd/attach.ts
 +++ b/packages/opencode/src/cli/cmd/attach.ts
-@@ -97,8 +97,6 @@ export const AttachCommand = cmd({
+@@ -4,6 +4,7 @@ import { UI } from "@/cli/ui"
+ import { errorMessage } from "@opencode-ai/tui/util/error"
+ import { validateSession } from "../tui/validate-session"
+ import { ServerAuth } from "@/server/auth"
++import { Flag } from "@opencode-ai/core/flag/flag"
+ 
+ export const AttachCommand = cmd({
+   command: "attach [url]",
+@@ -97,6 +98,10 @@ export const AttachCommand = cmd({
        return root
      })()
  
--    console.error(`[attach-debug] targetUrl: ${targetUrl} | callerDir: ${callerDir} | PWD: ${process.env.PWD} | cwd: ${process.cwd()} | directory: ${directory}`)
--
++    if (Flag.OPENCODE_DEBUG) {
++      console.error(`[attach-debug] targetUrl: ${targetUrl} | callerDir: ${callerDir} | PWD: ${process.env.PWD} | cwd: ${process.cwd()} | directory: ${directory}`)
++    }
++
      if (args.mini) {
        const { runMini } = await import("./run")
        await runMini({
+diff --git a/packages/opencode/src/index.ts b/packages/opencode/src/index.ts
+index f343781c7..89e8ce2c7 100644
+--- a/packages/opencode/src/index.ts
++++ b/packages/opencode/src/index.ts
+@@ -63,11 +63,21 @@ const cli = yargs(args)
+     type: "string",
+     choices: ["DEBUG", "INFO", "WARN", "ERROR"],
+   })
++  .option("debug", {
++    describe: "enable debug logging",
++    type: "boolean",
++    alias: "d",
++  })
+   .option("pure", {
+     describe: "run without external plugins",
+     type: "boolean",
+   })
+   .middleware(async (opts) => {
++    if (opts.debug) {
++      process.env.OPENCODE_DEBUG = "1"
++      process.env.OPENCODE_PRINT_LOGS = "1"
++      process.env.OPENCODE_LOG_LEVEL = "DEBUG"
++    }
+     if (opts.printLogs) process.env.OPENCODE_PRINT_LOGS = "1"
+     if (opts.logLevel) process.env.OPENCODE_LOG_LEVEL = opts.logLevel
+     if (opts.pure) {
 diff --git a/packages/opencode/src/server/routes/instance/httpapi/middleware/workspace-routing.ts b/packages/opencode/src/server/routes/instance/httpapi/middleware/workspace-routing.ts
-index 2ad3c0520..3d64b36fb 100644
+index 3d64b36fb..41fc8d86d 100644
 --- a/packages/opencode/src/server/routes/instance/httpapi/middleware/workspace-routing.ts
 +++ b/packages/opencode/src/server/routes/instance/httpapi/middleware/workspace-routing.ts
-@@ -100,9 +100,7 @@ function decodeDir(input?: string): string | undefined {
+@@ -100,7 +100,11 @@ function decodeDir(input?: string): string | undefined {
  
  function defaultDirectory(request: HttpServerRequest.HttpServerRequest, url: URL): string {
    const dir = url.searchParams.get("directory") || request.headers["x-opencode-directory"]
--  const decoded = decodeDir(dir) || process.cwd()
--  console.error(`[server-debug] ${request.method} ${url.pathname}${url.search} raw-dir: "${dir}" -> decoded: "${decoded}"`)
--  return decoded
-+  return decodeDir(dir) || process.cwd()
+-  return decodeDir(dir) || process.cwd()
++  const decoded = decodeDir(dir) || process.cwd()
++  if (Flag.OPENCODE_DEBUG) {
++    console.error(`[server-debug] ${request.method} ${url.pathname}${url.search} raw-dir: "${dir}" -> decoded: "${decoded}"`)
++  }
++  return decoded
  }
  
  function shouldStayOnControlPlane(request: HttpServerRequest.HttpServerRequest, url: URL): boolean {
-diff --git a/packages/tui/src/context/project.tsx b/packages/tui/src/context/project.tsx
-index 089b6eeba..d73a17e7e 100644
---- a/packages/tui/src/context/project.tsx
-+++ b/packages/tui/src/context/project.tsx
-@@ -44,7 +44,6 @@ export const { use: useProject, provider: ProjectProvider } = createSimpleContex
-       const directories = project.data?.id
-         ? await sdk.client.project.directories({ projectID: project.data.id, workspace })
-         : undefined
--      console.error(`[tui-debug] sync() sdk.url: ${sdk.url} | sdk.dir: ${sdk.directory} | project.worktree: ${project.data?.worktree} | instance.dir: ${instancePath.data?.directory}`)
-       batch(() => {
-         setStore("instance", "path", reconcile(instancePath.data || defaultPath))
-         setStore("project", "id", project.data?.id)

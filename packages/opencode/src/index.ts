@@ -63,11 +63,21 @@ const cli = yargs(args)
     type: "string",
     choices: ["DEBUG", "INFO", "WARN", "ERROR"],
   })
+  .option("debug", {
+    describe: "enable debug logging",
+    type: "boolean",
+    alias: "d",
+  })
   .option("pure", {
     describe: "run without external plugins",
     type: "boolean",
   })
   .middleware(async (opts) => {
+    if (opts.debug) {
+      process.env.OPENCODE_DEBUG = "1"
+      process.env.OPENCODE_PRINT_LOGS = "1"
+      process.env.OPENCODE_LOG_LEVEL = "DEBUG"
+    }
     if (opts.printLogs) process.env.OPENCODE_PRINT_LOGS = "1"
     if (opts.logLevel) process.env.OPENCODE_LOG_LEVEL = opts.logLevel
     if (opts.pure) {
