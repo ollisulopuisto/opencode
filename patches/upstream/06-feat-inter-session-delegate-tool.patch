@@ -1,0 +1,223 @@
+diff --git a/packages/core/src/tool/builtins.ts b/packages/core/src/tool/builtins.ts
+index a55812437..f763c4ed1 100644
+--- a/packages/core/src/tool/builtins.ts
++++ b/packages/core/src/tool/builtins.ts
+@@ -4,6 +4,7 @@ import { makeLocationNode } from "../effect/app-node"
+ import { Layer } from "effect"
+ import { BashTool } from "./bash"
+ import { ApplyPatchTool } from "./apply-patch"
++import { DelegateTool } from "./delegate"
+ import { EditTool } from "./edit"
+ import { GlobTool } from "./glob"
+ import { GrepTool } from "./grep"
+@@ -34,6 +35,7 @@ export const node = makeLocationNode({
+   deps: [
+     ApplyPatchTool.node,
+     BashTool.node,
++    DelegateTool.node,
+     EditTool.node,
+     GlobTool.node,
+     GrepTool.node,
+diff --git a/packages/core/src/tool/delegate.ts b/packages/core/src/tool/delegate.ts
+new file mode 100644
+index 000000000..9eee38930
+--- /dev/null
++++ b/packages/core/src/tool/delegate.ts
+@@ -0,0 +1,105 @@
++export * as DelegateTool from "./delegate"
++
++import { ToolFailure } from "@opencode-ai/llm"
++import { Effect, Layer, Schema } from "effect"
++import { makeLocationNode } from "../effect/app-node"
++import { PermissionV2 } from "../permission"
++import { SessionExecution } from "../session/execution"
++import { SessionInput } from "../session/input"
++import { SessionMessage } from "../session/message"
++import { SessionSchema } from "../session/schema"
++import { Prompt } from "../session/prompt"
++import { Database } from "../database/database"
++import { EventV2 } from "../event"
++import { ToolRegistry } from "./registry"
++import { Tool } from "./tool"
++import { Tools } from "./tools"
++
++export const name = "delegate"
++
++export const Input = Schema.Struct({
++  sessionID: Schema.String.annotate({
++    description: "Target session ID to send the message or task to.",
++  }),
++  prompt: Schema.String.annotate({
++    description: "The instructions, message, or delegated task for the target session.",
++  }),
++  mode: Schema.optional(Schema.Literals(["steer", "queue"])).annotate({
++    description: "Delivery mode: 'steer' (default) promotes at the next turn boundary; 'queue' waits until the target is idle.",
++  }),
++})
++
++export const Output = Schema.Struct({
++  sessionID: Schema.String,
++  messageID: Schema.String,
++  status: Schema.String,
++})
++
++export type Output = typeof Output.Type
++
++export const toModelOutput = (output: Output) =>
++  `Message admitted to session ${output.sessionID} with message ID ${output.messageID} (status: ${output.status}). Target session execution scheduled.`
++
++const layer = Layer.effectDiscard(
++  Effect.gen(function* () {
++    const tools = yield* Tools.Service
++    const { db } = yield* Database.Service
++    const events = yield* EventV2.Service
++    const execution = yield* SessionExecution.Service
++    const permission = yield* PermissionV2.Service
++
++    yield* tools
++      .register({
++        [name]: Tool.make({
++          description:
++            "Send a message or delegate a task to another OpenCode session. Enables inter-instance coordination, subagent orchestration, and background task execution.",
++          input: Input,
++          output: Output,
++          structured: Output,
++          toStructuredOutput: ({ output }) => output,
++          toModelOutput: ({ output }) => [{ type: "text", text: toModelOutput(output) }],
++          execute: (input, context) =>
++            Effect.gen(function* () {
++              yield* permission.assert({
++                action: name,
++                resources: [input.sessionID],
++                save: [input.sessionID],
++                sessionID: context.sessionID,
++                agent: context.agent,
++                source: { type: "tool", messageID: context.assistantMessageID, callID: context.toolCallID },
++              })
++
++              const messageID = SessionMessage.ID.make(`msg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`)
++              const targetSessionID = SessionSchema.ID.make(input.sessionID)
++              const delivery = input.mode === "queue" ? SessionInput.Delivery.make("queue") : SessionInput.Delivery.make("steer")
++
++              const prompt = Prompt.make({
++                text: input.prompt,
++              })
++
++              yield* SessionInput.admit(db, events, {
++                id: messageID,
++                sessionID: targetSessionID,
++                prompt,
++                delivery,
++              })
++
++              yield* execution.wake(targetSessionID)
++
++              return {
++                sessionID: input.sessionID,
++                messageID,
++                status: "admitted",
++              }
++            }).pipe(Effect.mapError((error) => new ToolFailure({ message: `Failed to delegate to session ${input.sessionID}: ${error}` }))),
++        }),
++      })
++      .pipe(Effect.orDie)
++  }),
++)
++
++export const node = makeLocationNode({
++  name: "tool/delegate",
++  layer,
++  deps: [ToolRegistry.node, Database.node, EventV2.node, SessionExecution.node, PermissionV2.node],
++})
+diff --git a/packages/core/test/tool-delegate.test.ts b/packages/core/test/tool-delegate.test.ts
+new file mode 100644
+index 000000000..0303e5516
+--- /dev/null
++++ b/packages/core/test/tool-delegate.test.ts
+@@ -0,0 +1,86 @@
++import { describe, expect } from "bun:test"
++import { Effect, Layer } from "effect"
++import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
++import { LayerNode } from "@opencode-ai/core/effect/layer-node"
++import { Database } from "@opencode-ai/core/database/database"
++import { EventV2 } from "@opencode-ai/core/event"
++import { Location } from "@opencode-ai/core/location"
++import { PermissionV2 } from "@opencode-ai/core/permission"
++import { SessionExecution } from "@opencode-ai/core/session/execution"
++import { SessionSchema } from "@opencode-ai/core/session/schema"
++import { ToolRegistry } from "@opencode-ai/core/tool/registry"
++import { Tools } from "@opencode-ai/core/tool/tools"
++import { DelegateTool } from "@opencode-ai/core/tool/delegate"
++import { AbsolutePath } from "@opencode-ai/core/schema"
++import { location } from "./fixture/location"
++import { testEffect } from "./lib/effect"
++
++const current = Layer.succeed(
++  Location.Service,
++  Location.Service.of(location({ directory: AbsolutePath.make("/project") })),
++)
++
++const woken: string[] = []
++const execution = Layer.succeed(
++  SessionExecution.Service,
++  SessionExecution.Service.of({
++    active: Effect.succeed(new Set()),
++    resume: () => Effect.void,
++    wake: (id) => Effect.sync(() => woken.push(id)),
++    interrupt: () => Effect.void,
++  }),
++)
++
++const permission = Layer.succeed(
++  PermissionV2.Service,
++  PermissionV2.Service.of({
++    assert: () => Effect.void,
++    ask: () => Effect.die("unused"),
++    reply: () => Effect.die("unused"),
++    get: () => Effect.die("unused"),
++    forSession: () => Effect.die("unused"),
++    list: () => Effect.succeed([]),
++  }),
++)
++
++const it = testEffect(
++  AppNodeBuilder.build(
++    LayerNode.group([Database.node, EventV2.node, ToolRegistry.node, DelegateTool.node]),
++    [
++      [Location.node, current],
++      [SessionExecution.node, execution],
++      [PermissionV2.node, permission],
++    ],
++  ),
++)
++
++import { toolDefinitions, settleTool, toolIdentity } from "./lib/tool"
++
++describe("DelegateTool", () => {
++  it.effect("registers delegate tool and wakes target session", () =>
++    Effect.gen(function* () {
++      const registry = yield* ToolRegistry.Service
++      const definitions = yield* toolDefinitions(registry)
++      expect(definitions.map((tool) => tool.name)).toContain("delegate")
++
++      const settlement = yield* settleTool(registry, {
++        sessionID: SessionSchema.ID.make("ses_primary"),
++        ...toolIdentity,
++        call: {
++          type: "tool-call" as const,
++          id: "call_1",
++          name: "delegate",
++          input: {
++            sessionID: "ses_target_worker",
++            prompt: "Please build and run tests",
++            mode: "steer",
++          },
++        },
++      })
++
++      expect((settlement.output as any)?.structured?.sessionID).toBe("ses_target_worker")
++      expect((settlement.output as any)?.structured?.status).toBe("admitted")
++      expect(woken).toContain("ses_target_worker")
++    }),
++  )
++})

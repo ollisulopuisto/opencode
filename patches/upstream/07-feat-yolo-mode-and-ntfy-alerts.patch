@@ -1,0 +1,197 @@
+diff --git a/packages/core/src/flag/flag.ts b/packages/core/src/flag/flag.ts
+index 5c3107f89..a9108e7aa 100644
+--- a/packages/core/src/flag/flag.ts
++++ b/packages/core/src/flag/flag.ts
+@@ -63,7 +63,7 @@ export const Flag = {
+   },
+   get OPENCODE_LSP_IDLE_TIMEOUT() {
+     const value = process.env["OPENCODE_LSP_IDLE_TIMEOUT"]
+-    return value !== undefined ? Number(value) : 300000
++    return value !== undefined ? Number(value) : 120000
+   },
+   get OPENCODE_SOCKET() {
+     return process.env["OPENCODE_SOCKET"]
+@@ -95,4 +95,13 @@ export const Flag = {
+   get OPENCODE_CLIENT() {
+     return process.env["OPENCODE_CLIENT"] ?? "cli"
+   },
++  get OPENCODE_DEBUG() {
++    return truthy("OPENCODE_DEBUG")
++  },
++  get OPENCODE_AUTO_ACCEPT() {
++    return truthy("OPENCODE_AUTO_ACCEPT") || truthy("OPENCODE_YOLO") || truthy("OPENCODE_DANGEROUSLY_SKIP_PERMISSIONS")
++  },
++  get OPENCODE_NTFY_URL() {
++    return process.env["OPENCODE_NTFY_URL"]
++  },
+ }
+diff --git a/packages/core/src/notify/ntfy.ts b/packages/core/src/notify/ntfy.ts
+new file mode 100644
+index 000000000..b80a28442
+--- /dev/null
++++ b/packages/core/src/notify/ntfy.ts
+@@ -0,0 +1,32 @@
++export * as Ntfy from "./ntfy"
++
++import { Effect } from "effect"
++import { Flag } from "../flag/flag"
++
++export interface NtfyMessage {
++  readonly title?: string
++  readonly message: string
++  readonly priority?: "min" | "low" | "default" | "high" | "urgent"
++  readonly tags?: ReadonlyArray<string>
++}
++
++export const send = (msg: NtfyMessage): Effect.Effect<void> =>
++  Effect.gen(function* () {
++    const url = Flag.OPENCODE_NTFY_URL ?? (process.env["OPENCODE_NTFY_TOPIC"] ? `https://ntfy.sh/${process.env["OPENCODE_NTFY_TOPIC"]}` : undefined)
++    if (!url) return
++
++    yield* Effect.tryPromise({
++      try: async () => {
++        await fetch(url, {
++          method: "POST",
++          headers: {
++            ...(msg.title ? { Title: msg.title } : {}),
++            ...(msg.priority ? { Priority: msg.priority } : {}),
++            ...(msg.tags?.length ? { Tags: msg.tags.join(",") } : {}),
++          },
++          body: msg.message,
++        })
++      },
++      catch: () => undefined,
++    }).pipe(Effect.ignore)
++  })
+diff --git a/packages/core/src/permission.ts b/packages/core/src/permission.ts
+index 3f28632a0..e2556b319 100644
+--- a/packages/core/src/permission.ts
++++ b/packages/core/src/permission.ts
+@@ -10,6 +10,7 @@ import { SessionV2 } from "./session"
+ import { SessionStore } from "./session/store"
+ import { Wildcard } from "./util/wildcard"
+ import { PermissionSaved } from "./permission/saved"
++import { Flag } from "./flag/flag"
+ 
+ export { Effect, Rule, Ruleset } from "@opencode-ai/schema/permission"
+ const missingAgentPermissions: Permission.Ruleset = [{ action: "*", resource: "*", effect: "deny" }]
+@@ -153,6 +154,7 @@ const layer = Layer.effect(
+     }
+ 
+     const evaluateInput = EffectRuntime.fnUntraced(function* (input: AssertInput) {
++      if (Flag.OPENCODE_AUTO_ACCEPT) return { effect: "allow" as const, rules: [] }
+       const rules = yield* configured(input.sessionID, input.agent)
+       if (denied(input, rules)) return { effect: "deny" as const, rules }
+       const all = [...rules, ...(yield* savedRules())]
+diff --git a/packages/core/test/notify-ntfy.test.ts b/packages/core/test/notify-ntfy.test.ts
+new file mode 100644
+index 000000000..4ae35ea0d
+--- /dev/null
++++ b/packages/core/test/notify-ntfy.test.ts
+@@ -0,0 +1,44 @@
++import { describe, expect, test, mock } from "bun:test"
++import { Effect } from "effect"
++import { Ntfy } from "@opencode-ai/core/notify/ntfy"
++
++describe("Ntfy", () => {
++  test("send skips when no url is configured", async () => {
++    delete process.env.OPENCODE_NTFY_URL
++    delete process.env.OPENCODE_NTFY_TOPIC
++    let called = false
++    const origFetch = globalThis.fetch
++    globalThis.fetch = mock(async () => {
++      called = true
++      return new Response("ok")
++    }) as any
++
++    try {
++      await Effect.runPromise(Ntfy.send({ message: "test message" }))
++      expect(called).toBe(false)
++    } finally {
++      globalThis.fetch = origFetch
++    }
++  })
++
++  test("send makes POST request when topic configured", async () => {
++    process.env.OPENCODE_NTFY_TOPIC = "test-topic-123"
++    let requestedUrl = ""
++    let requestedBody = ""
++    const origFetch = globalThis.fetch
++    globalThis.fetch = mock(async (url: any, init: any) => {
++      requestedUrl = String(url)
++      requestedBody = String(init?.body)
++      return new Response("ok")
++    }) as any
++
++    try {
++      await Effect.runPromise(Ntfy.send({ title: "Test Title", message: "Task completed", tags: ["robot"] }))
++      expect(requestedUrl).toBe("https://ntfy.sh/test-topic-123")
++      expect(requestedBody).toBe("Task completed")
++    } finally {
++      delete process.env.OPENCODE_NTFY_TOPIC
++      globalThis.fetch = origFetch
++    }
++  })
++})
+diff --git a/packages/core/test/permission-yolo.test.ts b/packages/core/test/permission-yolo.test.ts
+new file mode 100644
+index 000000000..47343a311
+--- /dev/null
++++ b/packages/core/test/permission-yolo.test.ts
+@@ -0,0 +1,56 @@
++import { describe, expect } from "bun:test"
++import { Effect, Layer } from "effect"
++import { AgentV2 } from "@opencode-ai/core/agent"
++import { Database } from "@opencode-ai/core/database/database"
++import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
++import { LayerNode } from "@opencode-ai/core/effect/layer-node"
++import { EventV2 } from "@opencode-ai/core/event"
++import { Location } from "@opencode-ai/core/location"
++import { PermissionV2 } from "@opencode-ai/core/permission"
++import { PermissionSaved } from "@opencode-ai/core/permission/saved"
++import { AbsolutePath } from "@opencode-ai/core/schema"
++import { SessionV2 } from "@opencode-ai/core/session"
++import { SessionStore } from "@opencode-ai/core/session/store"
++import { SessionMessage } from "@opencode-ai/core/session/message"
++import { location } from "./fixture/location"
++import { testEffect } from "./lib/effect"
++
++const current = Layer.succeed(
++  Location.Service,
++  Location.Service.of(location({ directory: AbsolutePath.make("/project") })),
++)
++
++const it = testEffect(
++  AppNodeBuilder.build(
++    LayerNode.group([
++      Database.node,
++      EventV2.node,
++      SessionStore.node,
++      PermissionSaved.node,
++      AgentV2.node,
++      PermissionV2.node,
++    ]),
++    [[Location.node, current]],
++  ),
++)
++
++describe("PermissionV2 YOLO auto-accept", () => {
++  it.effect("allows actions immediately when OPENCODE_AUTO_ACCEPT is enabled", () =>
++    Effect.gen(function* () {
++      process.env.OPENCODE_AUTO_ACCEPT = "1"
++      try {
++        const permission = yield* PermissionV2.Service
++        // Should succeed without hanging or erroring
++        yield* permission.assert({
++          action: "bash",
++          resources: ["rm -rf /tmp/test"],
++          save: ["rm -rf /tmp/test"],
++          sessionID: SessionV2.ID.make("ses_test"),
++          source: { type: "tool", messageID: SessionMessage.ID.make("msg_1"), callID: "call_1" },
++        })
++      } finally {
++        delete process.env.OPENCODE_AUTO_ACCEPT
++      }
++    }),
++  )
++})

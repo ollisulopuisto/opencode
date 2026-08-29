@@ -44,19 +44,46 @@ const collapseHistoricalResult = (result: unknown, isHistorical: boolean) => {
     const omitted = result.length - 1024
     return `${head}\n\n... [${omitted.toLocaleString()} bytes collapsed from historical turn] ...\n\n${tail}`
   }
-  if (
-    typeof result === "object" &&
-    result !== null &&
-    "output" in result &&
-    typeof (result as Record<string, unknown>)["output"] === "string"
-  ) {
-    const output = (result as Record<string, unknown>)["output"] as string
-    if (output.length > 2048) {
-      const head = output.slice(0, 512)
-      const tail = output.slice(-512)
-      const omitted = output.length - 1024
+  if (typeof result === "object" && result !== null) {
+    const obj = result as Record<string, unknown>
+    if (typeof obj.value === "string" && obj.value.length > 2048) {
+      const head = obj.value.slice(0, 512)
+      const tail = obj.value.slice(-512)
+      const omitted = obj.value.length - 1024
       return {
-        ...result,
+        ...obj,
+        value: `${head}\n\n... [${omitted.toLocaleString()} bytes collapsed from historical turn] ...\n\n${tail}`,
+      }
+    }
+    if (Array.isArray(obj.value)) {
+      return {
+        ...obj,
+        value: obj.value.map((part) => {
+          if (
+            part &&
+            typeof part === "object" &&
+            part.type === "text" &&
+            typeof part.text === "string" &&
+            part.text.length > 2048
+          ) {
+            const head = part.text.slice(0, 512)
+            const tail = part.text.slice(-512)
+            const omitted = part.text.length - 1024
+            return {
+              ...part,
+              text: `${head}\n\n... [${omitted.toLocaleString()} bytes collapsed from historical turn] ...\n\n${tail}`,
+            }
+          }
+          return part
+        }),
+      }
+    }
+    if (typeof obj.output === "string" && obj.output.length > 2048) {
+      const head = obj.output.slice(0, 512)
+      const tail = obj.output.slice(-512)
+      const omitted = obj.output.length - 1024
+      return {
+        ...obj,
         output: `${head}\n\n... [${omitted.toLocaleString()} bytes collapsed from historical turn] ...\n\n${tail}`,
         truncated: true,
       }
@@ -137,7 +164,11 @@ const assistant = (message: SessionMessage.Assistant, model: Model, isHistorical
   const results = message.content
     .filter((item): item is SessionMessage.AssistantTool => item.type === "tool" && item.provider?.executed !== true)
     .map((item) =>
-      toolResult(item, reuseProviderMetadata ? (item.provider?.resultMetadata ?? item.provider?.metadata) : undefined),
+      toolResult(
+        item,
+        reuseProviderMetadata ? (item.provider?.resultMetadata ?? item.provider?.metadata) : undefined,
+        isHistorical,
+      ),
     )
     .filter((message) => message !== undefined)
     .map(Message.tool)

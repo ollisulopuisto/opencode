@@ -1,0 +1,40 @@
+diff --git a/packages/core/src/database/sqlite.bun.ts b/packages/core/src/database/sqlite.bun.ts
+index e15f4c117..5de69b487 100644
+--- a/packages/core/src/database/sqlite.bun.ts
++++ b/packages/core/src/database/sqlite.bun.ts
+@@ -161,7 +161,14 @@ const nativeLayer = (config: Config) =>
+         create: config.create ?? true,
+       })
+       yield* Effect.addFinalizer(() => Effect.sync(() => native.close()))
+-      if (config.disableWAL !== true) native.run("PRAGMA journal_mode = WAL;")
++      if (config.disableWAL !== true && config.readonly !== true) {
++        native.run("PRAGMA journal_mode = WAL;")
++        native.run("PRAGMA synchronous = NORMAL;")
++        native.run("PRAGMA wal_autocheckpoint = 1000;")
++        native.run("PRAGMA busy_timeout = 5000;")
++        native.run("PRAGMA temp_store = MEMORY;")
++        native.run("PRAGMA mmap_size = 268435456;")
++      }
+       return native
+     }),
+   )
+diff --git a/packages/core/src/database/sqlite.node.ts b/packages/core/src/database/sqlite.node.ts
+index 6eaecbee2..4821ae928 100644
+--- a/packages/core/src/database/sqlite.node.ts
++++ b/packages/core/src/database/sqlite.node.ts
+@@ -156,7 +156,14 @@ const nativeLayer = (config: Config) =>
+         open: true,
+       })
+       yield* Effect.addFinalizer(() => Effect.sync(() => native.close()))
+-      if (config.disableWAL !== true && config.readonly !== true) native.exec("PRAGMA journal_mode = WAL;")
++      if (config.disableWAL !== true && config.readonly !== true) {
++        native.exec("PRAGMA journal_mode = WAL;")
++        native.exec("PRAGMA synchronous = NORMAL;")
++        native.exec("PRAGMA wal_autocheckpoint = 1000;")
++        native.exec("PRAGMA busy_timeout = 5000;")
++        native.exec("PRAGMA temp_store = MEMORY;")
++        native.exec("PRAGMA mmap_size = 268435456;")
++      }
+       return native
+     }),
+   )

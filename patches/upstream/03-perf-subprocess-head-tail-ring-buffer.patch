@@ -1,0 +1,41 @@
+diff --git a/packages/core/src/tool/bash.ts b/packages/core/src/tool/bash.ts
+index 22423764b..da7652a14 100644
+--- a/packages/core/src/tool/bash.ts
++++ b/packages/core/src/tool/bash.ts
+@@ -94,6 +94,17 @@ const externalCommandDirectories = Effect.fn("BashTool.externalCommandDirectorie
+   return [...directories]
+ })
+ 
++const formatHeadTailOutput = (text: string, maxBytes = 64 * 1024, headBytes = 4 * 1024, tailBytes = 20 * 1024) => {
++  if (text.length <= maxBytes) return { text, truncated: false }
++  const head = text.slice(0, headBytes)
++  const tail = text.slice(-tailBytes)
++  const omitted = text.length - headBytes - tailBytes
++  return {
++    text: `${head}\n\n... [${omitted.toLocaleString()} bytes omitted for brevity; full output recorded in logs] ...\n\n${tail}`,
++    truncated: true,
++  }
++}
++
+ const layer = Layer.effectDiscard(
+   Effect.gen(function* () {
+     const tools = yield* Tools.Service
+@@ -183,14 +194,15 @@ const layer = Layer.effectDiscard(
+                 }
+               }
+ 
+-              const output = result.output?.toString("utf8") || "(no output)"
+-              const notice = result.outputTruncated
++              const rawText = result.output?.toString("utf8") || "(no output)"
++              const { text: output, truncated } = formatHeadTailOutput(rawText)
++              const notice = result.outputTruncated || truncated
+                 ? "[output capture truncated at the in-memory safety limit]"
+                 : undefined
+               return {
+                 exit: result.exitCode,
+                 output: notice ? `${output}\n\n${notice}` : output,
+-                truncated: result.outputTruncated === true,
++                truncated: result.outputTruncated === true || truncated,
+                 ...(warnings.length ? { warnings } : {}),
+               }
+             }).pipe(Effect.mapError(() => new ToolFailure({ message: `Unable to execute command: ${input.command}` }))),
