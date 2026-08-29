@@ -1,4 +1,5 @@
 import { cmd } from "./cmd"
+import path from "path"
 import { UI } from "@/cli/ui"
 import { errorMessage } from "@opencode-ai/tui/util/error"
 import { validateSession } from "../tui/validate-session"
@@ -78,16 +79,18 @@ export const AttachCommand = cmd({
     const noReplay = args.replay === false || args.noReplay === true
 
     const directory = (() => {
+      const root = process.env.PWD ?? process.cwd()
       if (args.dir) {
         try {
-          process.chdir(args.dir)
+          const resolved = path.isAbsolute(args.dir) ? args.dir : path.join(root, args.dir)
+          process.chdir(resolved)
           return process.cwd()
         } catch {
           // If the directory doesn't exist locally (remote attach), pass it through.
           return args.dir
         }
       }
-      return process.cwd()
+      return root
     })()
 
     if (args.mini) {
