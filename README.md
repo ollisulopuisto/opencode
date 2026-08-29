@@ -112,6 +112,41 @@ This is used internally and can be invoked using `@general` in messages.
 
 Learn more about [agents](https://opencode.ai/docs/agents).
 
+### Advanced Capabilities & Optimizations
+
+#### Autonomous YOLO Mode
+For unattended, fire-and-forget autonomous coding sessions:
+```bash
+# Enable autonomous execution without manual tool approval prompts
+OPENCODE_AUTO_ACCEPT=1 opencode
+# or with the background server
+OPENCODE_AUTO_ACCEPT=1 opencode serve --socket /tmp/opencode.sock
+```
+
+#### Inter-Session Delegation & Subagents (`delegate` tool)
+Agents can orchestrate and delegate subtasks to other OpenCode sessions concurrently:
+- **`steer` mode:** Injects instructions into the subagent at the next provider turn.
+- **`queue` mode:** Queues work until the subagent completes its current task.
+
+#### Claude Code-Inspired Performance & Memory Engine
+- **Prompt Cache Pinning:** Deterministically ordered tool schemas for >95% prompt cache hit rates.
+- **Slotted Tool Collapsing:** Historical tool outputs older than 2 turns are automatically compacted into lightweight references, preserving context window and reducing RAM.
+- **Subprocess Head/Tail Ring Buffer:** 64 KB bounded command log capture with full preservation of invocation and error stack traces.
+- **Memory-Mapped SQLite:** 256 MB zero-copy memory-mapped I/O with auto-checkpointing WAL.
+- **Aggressive LSP Inactivity Reclamation:** Idle LSP servers are stopped after 2 minutes to reclaim memory.
+
+#### Lightweight `ntfy.sh` Webhook Alerts
+Receive instant phone push alerts when background tasks finish:
+```bash
+export OPENCODE_NTFY_TOPIC=my-private-opencode-topic
+```
+
+#### Dev Fork Updater
+Sync and hot-restart your running background server with the latest commits:
+```bash
+opencode update
+```
+
 ### Documentation
 
 For more info on how to configure OpenCode, [**head over to our docs**](https://opencode.ai/docs).
