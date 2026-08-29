@@ -20,6 +20,7 @@ globalThis.AI_SDK_LOG_WARNINGS = false
 export type Listener = {
   hostname: string
   port: number
+  socket?: string
   url: URL
   stop: (close?: boolean) => Promise<void>
 }
@@ -32,6 +33,7 @@ type ServerApp = {
 type ListenOptions = CorsOptions & {
   port: number
   hostname: string
+  socket?: string
   mdns?: boolean
   mdnsDomain?: string
 }
@@ -75,6 +77,7 @@ export async function listen(opts: ListenOptions): Promise<Listener> {
   return {
     hostname: listener.hostname,
     port: listener.port,
+    socket: listener.socket,
     url: listener.url,
     stop: (close?: boolean) => Effect.runPromiseExit(listener.stop(close)).then(() => undefined),
   }
@@ -82,6 +85,19 @@ export async function listen(opts: ListenOptions): Promise<Listener> {
 
 const listenEffect: (opts: ListenOptions) => Effect.Effect<EffectListener, unknown> = Effect.fn("Server.listen")(
   function* (opts: ListenOptions) {
+    if (opts.socket) {
+      const state = yield* startSocketListener(opts, opts.socket)
+      const listenerUrl = new URL("http://localhost")
+      url = listenerUrl
+      return {
+        hostname: "unix",
+        port: 0,
+        socket: opts.socket,
+        url: listenerUrl,
+        stop: yield* makeStop(state, Effect.void, listenerUrl),
+      }
+    }
+
     const state = yield* startWithPortFallback(opts)
     const address = yield* tcpAddress(state)
     const listenerUrl = makeURL(opts.hostname, address.port)
@@ -111,6 +127,40 @@ function listenerLayer(opts: ListenOptions, port: number) {
     // result on a module-singleton Reference; without overriding it here,
     // every later `Server.listen()` keeps observing that initial snapshot.
     Layer.provide(ConfigProvider.layer(ConfigProvider.fromEnv())),
+  )
+}
+
+function socketListenerLayer(opts: ListenOptions, socketPath: string) {
+  return HttpRouter.serve(HttpApiApp.createRoutes(opts), {
+    middleware: disposeMiddleware,
+    disableLogger: true,
+    disableListenLog: true,
+  }).pipe(
+    Layer.provideMerge(AppNodeBuilder.build(WebSocketTracker.node)),
+    Layer.provideMerge(serverLayer({ path: socketPath })),
+    Layer.provide(ConfigProvider.layer(ConfigProvider.fromEnv())),
+  )
+}
+
+function startSocketListener(opts: ListenOptions, socketPath: string) {
+  const scope = Scope.makeUnsafe()
+  try {
+    const fs = require("node:fs")
+    if (fs.existsSync(socketPath)) {
+      fs.unlinkSync(socketPath)
+    }
+  } catch {}
+  return Layer.buildWithMemoMap(socketListenerLayer(opts, socketPath), Layer.makeMemoMapUnsafe(), scope).pipe(
+    Effect.provide(HttpApiApp.context),
+    Effect.onError(() => Scope.close(scope, Exit.void).pipe(Effect.ignore)),
+    Effect.map(
+      (ctx): ListenerState => ({
+        scope,
+        server: Context.get(ctx, HttpServer.HttpServer),
+        http: Context.get(ctx, ListenerServerService),
+        websockets: Context.get(ctx, WebSocketTracker.Service),
+      }),
+    ),
   )
 }
 
@@ -196,7 +246,7 @@ function forceClose(state: ListenerState) {
   return Effect.all([state.http.closeAll, state.websockets.closeAll], { concurrency: "unbounded", discard: true })
 }
 
-function serverLayer(opts: { port: number; hostname: string }) {
+function serverLayer(opts: { port?: number; hostname?: string; path?: string }) {
   const server = createServer()
   const serverRef = { closeStarted: false, forceStop: false }
   const close = server.close.bind(server)
@@ -210,8 +260,12 @@ function serverLayer(opts: { port: number; hostname: string }) {
     return result
   }) as typeof server.close
 
+  const nodeOptions = opts.path
+    ? { path: opts.path, gracefulShutdownTimeout: "1 second" }
+    : { port: opts.port ?? 0, host: opts.hostname ?? "127.0.0.1", gracefulShutdownTimeout: "1 second" }
+
   return Layer.mergeAll(
-    NodeHttpServer.layer(() => server, { port: opts.port, host: opts.hostname, gracefulShutdownTimeout: "1 second" }),
+    NodeHttpServer.layer(() => server, nodeOptions as any),
     Layer.succeed(ListenerServerService)(
       ListenerServerService.of({
         closeAll: Effect.sync(() => {

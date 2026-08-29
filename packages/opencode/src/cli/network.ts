@@ -30,6 +30,11 @@ const options = {
     describe: "additional domains to allow for CORS",
     default: [] as string[],
   },
+  socket: {
+    type: "string" as const,
+    describe: "unix domain socket path to listen on (e.g. /tmp/opencode.sock)",
+    default: "",
+  },
 }
 
 export type NetworkOptions = InferredOptionTypes<typeof options>
@@ -72,9 +77,11 @@ export function resolveNetworkOptionsNoConfig(args: NetworkOptions, config?: Con
     : mdns && !config?.server?.hostname
       ? "0.0.0.0"
       : (config?.server?.hostname ?? args.hostname)
+  const socketExplicitlySet = hasArg("--socket")
+  const socket = socketExplicitlySet ? args.socket : (process.env["OPENCODE_SOCKET"] ?? args.socket ?? "")
   const configCors = config?.server?.cors ?? []
   const argsCors = Array.isArray(args.cors) ? args.cors : args.cors ? [args.cors] : []
   const cors = [...configCors, ...argsCors]
 
-  return { hostname, port, mdns, mdnsDomain, cors }
+  return { hostname, port, mdns, mdnsDomain, cors, socket }
 }

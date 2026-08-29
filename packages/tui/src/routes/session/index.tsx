@@ -83,7 +83,18 @@ import { OPENCODE_BASE_MODE, useBindings, useCommandShortcut, useOpencodeKeymap 
 import { usePathFormatter } from "../../context/path-format"
 import { LocationProvider } from "../../context/location"
 
-addDefaultParsers(parsers.parsers)
+const CORE_FILETYPES = new Set(["diff", "json", "yaml", "bash", "python", "rust", "go", "c", "cpp"])
+const loadedFiletypes = new Set<string>(CORE_FILETYPES)
+addDefaultParsers(parsers.parsers.filter((p) => CORE_FILETYPES.has(p.filetype)))
+
+export function ensureParser(ft?: string) {
+  if (!ft || loadedFiletypes.has(ft)) return
+  loadedFiletypes.add(ft)
+  const target = parsers.parsers.find((p) => p.filetype === ft || (p.aliases && p.aliases.includes(ft)))
+  if (target) {
+    addDefaultParsers([target])
+  }
+}
 
 const GO_UPSELL_FREE_TIER_LAST_SEEN_AT = "go_upsell_last_seen_at"
 const GO_UPSELL_FREE_TIER_DONT_SHOW = "go_upsell_dont_show"
@@ -2405,7 +2416,11 @@ function Edit(props: ToolProps) {
     return ctx.width > 120 ? "split" : "unified"
   })
 
-  const ft = createMemo(() => filetype(stringValue(props.input.filePath)))
+  const ft = createMemo(() => {
+    const res = filetype(stringValue(props.input.filePath))
+    ensureParser(res)
+    return res
+  })
 
   const diffContent = createMemo(() => stringValue(props.metadata.diff) ?? "")
 

@@ -65,6 +65,15 @@ export const Flag = {
     const value = process.env["OPENCODE_LSP_IDLE_TIMEOUT"]
     return value !== undefined ? Number(value) : 300000
   },
+  get OPENCODE_SOCKET() {
+    return process.env["OPENCODE_SOCKET"]
+  },
+  get OPENCODE_MLX_URL() {
+    return process.env["OPENCODE_MLX_URL"] ?? "http://127.0.0.1:8080/v1"
+  },
+  get OPENCODE_DIFF_FULL_CONTEXT() {
+    return truthy("OPENCODE_DIFF_FULL_CONTEXT")
+  },
   get OPENCODE_EXPERIMENTAL_REFERENCES() {
     return enabledByExperimental("OPENCODE_EXPERIMENTAL_REFERENCES")
   },
