@@ -63,7 +63,7 @@ export const Flag = {
   },
   get OPENCODE_LSP_IDLE_TIMEOUT() {
     const value = process.env["OPENCODE_LSP_IDLE_TIMEOUT"]
-    return value !== undefined ? Number(value) : 300000
+    return value !== undefined ? Number(value) : 120000
   },
   get OPENCODE_SOCKET() {
     return process.env["OPENCODE_SOCKET"]
@@ -97,5 +97,11 @@ export const Flag = {
   },
   get OPENCODE_DEBUG() {
     return truthy("OPENCODE_DEBUG")
+  },
+  get OPENCODE_AUTO_ACCEPT() {
+    return truthy("OPENCODE_AUTO_ACCEPT") || truthy("OPENCODE_YOLO") || truthy("OPENCODE_DANGEROUSLY_SKIP_PERMISSIONS")
+  },
+  get OPENCODE_NTFY_URL() {
+    return process.env["OPENCODE_NTFY_URL"]
   },
 }

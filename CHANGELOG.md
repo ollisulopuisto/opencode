@@ -9,6 +9,8 @@ and this project adheres to [Calendar Versioning](https://calver.org/) (`vYY.MM.
 
 ### Added
 - Built-in `delegate` tool (`@opencode-ai/core/tool/delegate`) enabling OpenCode agents to send messages, delegate tasks across sessions, and orchestrate subagent execution.
+- Headless YOLO mode via `OPENCODE_AUTO_ACCEPT=1` / `OPENCODE_YOLO=1` flag in `PermissionV2` for unattended background runs.
+- Lightweight zero-dependency `ntfy` webhook notifications module (`@opencode-ai/core/notify/ntfy`) wired to session completion in LLM runner.
 - Unix domain socket server and client transport support (`--socket <path>`).
 - `--debug` / `-d` CLI option to gate verbose trace logging across client and server.
 - Apple Silicon Metal MLX local provider sidecar integration (`@opencode-ai/core/plugin/provider/mlx`).
@@ -22,6 +24,7 @@ and this project adheres to [Calendar Versioning](https://calver.org/) (`vYY.MM.
 - Fixed diff memory consumption by switching from full-file context to compact delta snapshots (`context: 4`).
 
 ### Changed
+- Tightened default LSP server inactivity timeout from 5m to 2m (`120_000ms`) for aggressive process and RAM reclamation.
 - Implemented Slotted Tool Output Collapsing for historical turns older than 2 turns (`to-llm-message.ts`) to reduce working context tokens and cut memory allocations.
 - Implemented Head/Tail Subprocess Ring Buffer for shell executions (`bash.ts`), bounding verbose output while preserving initial invocation and exit errors.
 - Sorted tool definitions deterministically in LLM runner (`llm.ts`) for maximum prompt cache hit rate across turns.

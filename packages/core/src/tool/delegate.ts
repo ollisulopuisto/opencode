@@ -55,6 +55,8 @@ const layer = Layer.effectDiscard(
             "Send a message or delegate a task to another OpenCode session. Enables inter-instance coordination, subagent orchestration, and background task execution.",
           input: Input,
           output: Output,
+          structured: Output,
+          toStructuredOutput: ({ output }) => output,
           toModelOutput: ({ output }) => [{ type: "text", text: toModelOutput(output) }],
           execute: (input, context) =>
             Effect.gen(function* () {

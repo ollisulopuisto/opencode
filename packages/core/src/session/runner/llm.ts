@@ -39,6 +39,7 @@ import { MAX_STEPS_PROMPT } from "./max-steps"
 import { Snapshot } from "../../snapshot"
 import { makeLocationNode } from "../../effect/app-node"
 import { llmClient } from "../../effect/app-node-platform"
+import { Ntfy } from "../../notify/ntfy"
 
 /**
  * Runs one durable coding-agent Session until it settles.
@@ -410,6 +411,11 @@ const layer = Layer.effect(
         shouldRun = yield* SessionInput.hasPending(db, input.sessionID, "queue")
         promotion = shouldRun ? "queue" : undefined
       }
+      yield* Ntfy.send({
+        title: "OpenCode Session Settled",
+        message: `Session ${input.sessionID} finished all tasks.`,
+        tags: ["robot", "white_check_mark"],
+      })
     })
 
     return Service.of({
