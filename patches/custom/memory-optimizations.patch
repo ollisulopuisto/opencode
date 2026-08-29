@@ -1,81 +1,20 @@
-diff --git a/packages/core/src/flag/flag.ts b/packages/core/src/flag/flag.ts
-index d56d2a570..a9108e7aa 100644
---- a/packages/core/src/flag/flag.ts
-+++ b/packages/core/src/flag/flag.ts
-@@ -63,7 +63,7 @@ export const Flag = {
-   },
-   get OPENCODE_LSP_IDLE_TIMEOUT() {
-     const value = process.env["OPENCODE_LSP_IDLE_TIMEOUT"]
--    return value !== undefined ? Number(value) : 300000
-+    return value !== undefined ? Number(value) : 120000
-   },
-   get OPENCODE_SOCKET() {
-     return process.env["OPENCODE_SOCKET"]
-@@ -98,4 +98,10 @@ export const Flag = {
-   get OPENCODE_DEBUG() {
-     return truthy("OPENCODE_DEBUG")
-   },
-+  get OPENCODE_AUTO_ACCEPT() {
-+    return truthy("OPENCODE_AUTO_ACCEPT") || truthy("OPENCODE_YOLO") || truthy("OPENCODE_DANGEROUSLY_SKIP_PERMISSIONS")
-+  },
-+  get OPENCODE_NTFY_URL() {
-+    return process.env["OPENCODE_NTFY_URL"]
-+  },
- }
-diff --git a/packages/core/src/permission.ts b/packages/core/src/permission.ts
-index 3f28632a0..e2556b319 100644
---- a/packages/core/src/permission.ts
-+++ b/packages/core/src/permission.ts
-@@ -10,6 +10,7 @@ import { SessionV2 } from "./session"
- import { SessionStore } from "./session/store"
- import { Wildcard } from "./util/wildcard"
- import { PermissionSaved } from "./permission/saved"
-+import { Flag } from "./flag/flag"
- 
- export { Effect, Rule, Ruleset } from "@opencode-ai/schema/permission"
- const missingAgentPermissions: Permission.Ruleset = [{ action: "*", resource: "*", effect: "deny" }]
-@@ -153,6 +154,7 @@ const layer = Layer.effect(
-     }
- 
-     const evaluateInput = EffectRuntime.fnUntraced(function* (input: AssertInput) {
-+      if (Flag.OPENCODE_AUTO_ACCEPT) return { effect: "allow" as const, rules: [] }
-       const rules = yield* configured(input.sessionID, input.agent)
-       if (denied(input, rules)) return { effect: "deny" as const, rules }
-       const all = [...rules, ...(yield* savedRules())]
-diff --git a/packages/core/src/session/runner/llm.ts b/packages/core/src/session/runner/llm.ts
-index b412dcd41..453602012 100644
---- a/packages/core/src/session/runner/llm.ts
-+++ b/packages/core/src/session/runner/llm.ts
-@@ -39,6 +39,7 @@ import { MAX_STEPS_PROMPT } from "./max-steps"
- import { Snapshot } from "../../snapshot"
- import { makeLocationNode } from "../../effect/app-node"
- import { llmClient } from "../../effect/app-node-platform"
-+import { Ntfy } from "../../notify/ntfy"
- 
- /**
-  * Runs one durable coding-agent Session until it settles.
-@@ -410,6 +411,11 @@ const layer = Layer.effect(
-         shouldRun = yield* SessionInput.hasPending(db, input.sessionID, "queue")
-         promotion = shouldRun ? "queue" : undefined
-       }
-+      yield* Ntfy.send({
-+        title: "OpenCode Session Settled",
-+        message: `Session ${input.sessionID} finished all tasks.`,
-+        tags: ["robot", "white_check_mark"],
-+      })
-     })
- 
-     return Service.of({
-diff --git a/packages/core/src/tool/delegate.ts b/packages/core/src/tool/delegate.ts
-index 56241133b..9eee38930 100644
---- a/packages/core/src/tool/delegate.ts
-+++ b/packages/core/src/tool/delegate.ts
-@@ -55,6 +55,8 @@ const layer = Layer.effectDiscard(
-             "Send a message or delegate a task to another OpenCode session. Enables inter-instance coordination, subagent orchestration, and background task execution.",
-           input: Input,
-           output: Output,
-+          structured: Output,
-+          toStructuredOutput: ({ output }) => output,
-           toModelOutput: ({ output }) => [{ type: "text", text: toModelOutput(output) }],
-           execute: (input, context) =>
-             Effect.gen(function* () {
+diff --git a/packages/opencode/src/index.ts b/packages/opencode/src/index.ts
+index 89e8ce2c7..f1801826a 100644
+--- a/packages/opencode/src/index.ts
++++ b/packages/opencode/src/index.ts
+@@ -6,6 +6,7 @@ import { ConsoleCommand } from "./cli/cmd/account"
+ import { ProvidersCommand } from "./cli/cmd/providers"
+ import { AgentCommand } from "./cli/cmd/agent"
+ import { UpgradeCommand } from "./cli/cmd/upgrade"
++import { UpdateCommand } from "./cli/cmd/update"
+ import { UninstallCommand } from "./cli/cmd/uninstall"
+ import { ModelsCommand } from "./cli/cmd/models"
+ import { UI } from "./cli/ui"
+@@ -103,6 +104,7 @@ const cli = yargs(args)
+   .command(ProvidersCommand)
+   .command(AgentCommand)
+   .command(UpgradeCommand)
++  .command(UpdateCommand)
+   .command(UninstallCommand)
+   .command(ServeCommand)
+   .command(WebCommand)
