@@ -1,168 +1,28 @@
 diff --git a/packages/opencode/src/cli/cmd/attach.ts b/packages/opencode/src/cli/cmd/attach.ts
-index 6f5aea6a1..5e6e282c9 100644
+index 5e6e282c9..2e8038416 100644
 --- a/packages/opencode/src/cli/cmd/attach.ts
 +++ b/packages/opencode/src/cli/cmd/attach.ts
-@@ -5,14 +5,17 @@ import { validateSession } from "../tui/validate-session"
- import { ServerAuth } from "@/server/auth"
+@@ -78,14 +78,16 @@ export const AttachCommand = cmd({
+     const noReplay = args.replay === false || args.noReplay === true
  
- export const AttachCommand = cmd({
--  command: "attach <url>",
-+  command: "attach [url]",
-   describe: "attach to a running opencode server",
-   builder: (yargs) =>
-     yargs
-       .positional("url", {
-         type: "string",
--        describe: "http://localhost:4096",
--        demandOption: true,
-+        describe: "http://localhost:4096 or /tmp/opencode.sock",
-+      })
-+      .option("socket", {
-+        type: "string",
-+        describe: "unix domain socket path to attach to (e.g. /tmp/opencode.sock)",
-       })
-       .option("dir", {
-         type: "string",
-@@ -60,6 +63,13 @@ export const AttachCommand = cmd({
-         describe: "cap visible mini replay to the newest N messages",
-       }),
-   handler: async (args) => {
-+    const targetUrl = args.socket ? args.socket : args.url
-+    if (!targetUrl) {
-+      UI.error("Please provide a server URL or socket path to attach to (e.g. opencode attach http://localhost:4096 or opencode attach /tmp/opencode.sock)")
-+      process.exitCode = 1
-+      return
-+    }
-+
-     if (args.replay === true) {
-       UI.error("--replay is not supported; replay is enabled by default")
-       process.exitCode = 1
-@@ -81,7 +91,7 @@ export const AttachCommand = cmd({
+     const directory = (() => {
+-      if (!args.dir) return undefined
+-      try {
+-        process.chdir(args.dir)
+-        return process.cwd()
+-      } catch {
+-        // If the directory doesn't exist locally (remote attach), pass it through.
+-        return args.dir
++      if (args.dir) {
++        try {
++          process.chdir(args.dir)
++          return process.cwd()
++        } catch {
++          // If the directory doesn't exist locally (remote attach), pass it through.
++          return args.dir
++        }
+       }
++      return process.cwd()
+     })()
+ 
      if (args.mini) {
-       const { runMini } = await import("./run")
-       await runMini({
--        attach: args.url,
-+        attach: targetUrl,
-         directory,
-         password: args.password,
-         username: args.username,
-@@ -116,7 +126,7 @@ export const AttachCommand = cmd({
- 
-     try {
-       await validateSession({
--        url: args.url,
-+        url: targetUrl,
-         sessionID: args.session,
-         directory,
-         headers,
-@@ -132,7 +142,7 @@ export const AttachCommand = cmd({
-     const { createLegacyTuiPluginHost } = await import("@/plugin/tui/runtime")
-     await Effect.runPromise(
-       run({
--        url: args.url,
-+        url: targetUrl,
-         config,
-         pluginHost: createLegacyTuiPluginHost(),
-         args: {
-diff --git a/packages/sdk/js/src/client.ts b/packages/sdk/js/src/client.ts
-index 5cf071e7b..77b2a9ab3 100644
---- a/packages/sdk/js/src/client.ts
-+++ b/packages/sdk/js/src/client.ts
-@@ -31,16 +31,38 @@ function rewrite(request: Request, directory?: string) {
- }
- 
- export function createOpencodeClient(config?: Config & { directory?: string }) {
--  if (!config?.fetch) {
--    const customFetch: any = (req: any) => {
--      // @ts-ignore
--      req.timeout = false
--      return fetch(req)
-+  let baseUrl = config?.baseUrl
-+  let unixSocket: string | undefined
-+  if (baseUrl) {
-+    if (baseUrl.startsWith("unix://")) {
-+      unixSocket = baseUrl.slice(7)
-+      baseUrl = "http://localhost"
-+    } else if (baseUrl.startsWith("unix:")) {
-+      unixSocket = baseUrl.slice(5)
-+      baseUrl = "http://localhost"
-+    } else if (baseUrl.startsWith("/") || baseUrl.startsWith("./")) {
-+      unixSocket = baseUrl
-+      baseUrl = "http://localhost"
-     }
--    config = {
--      ...config,
--      fetch: customFetch,
-+  }
-+
-+  const baseFetch = config?.fetch ?? fetch
-+  const customFetch: any = (req: any, init?: any) => {
-+    if (unixSocket) {
-+      if (typeof req === "string" || req instanceof URL) {
-+        return (baseFetch as any)(req, { ...init, unix: unixSocket })
-+      }
-+      return (baseFetch as any)(req, { unix: unixSocket })
-     }
-+    // @ts-ignore
-+    if (req && typeof req === "object") req.timeout = false
-+    return (baseFetch as any)(req, init)
-+  }
-+
-+  config = {
-+    ...config,
-+    baseUrl,
-+    fetch: customFetch,
-   }
- 
-   if (config?.directory) {
-diff --git a/packages/sdk/js/src/v2/client.ts b/packages/sdk/js/src/v2/client.ts
-index c1956cffe..0862473c7 100644
---- a/packages/sdk/js/src/v2/client.ts
-+++ b/packages/sdk/js/src/v2/client.ts
-@@ -48,16 +48,38 @@ function rewrite(request: Request, values: { directory?: string; workspace?: str
- }
- 
- export function createOpencodeClient(config?: Config & { directory?: string; experimental_workspaceID?: string }) {
--  if (!config?.fetch) {
--    const customFetch: any = (req: any) => {
--      // @ts-ignore
--      req.timeout = false
--      return fetch(req)
-+  let baseUrl = config?.baseUrl
-+  let unixSocket: string | undefined
-+  if (baseUrl) {
-+    if (baseUrl.startsWith("unix://")) {
-+      unixSocket = baseUrl.slice(7)
-+      baseUrl = "http://localhost"
-+    } else if (baseUrl.startsWith("unix:")) {
-+      unixSocket = baseUrl.slice(5)
-+      baseUrl = "http://localhost"
-+    } else if (baseUrl.startsWith("/") || baseUrl.startsWith("./")) {
-+      unixSocket = baseUrl
-+      baseUrl = "http://localhost"
-     }
--    config = {
--      ...config,
--      fetch: customFetch,
-+  }
-+
-+  const baseFetch = config?.fetch ?? fetch
-+  const customFetch: any = (req: any, init?: any) => {
-+    if (unixSocket) {
-+      if (typeof req === "string" || req instanceof URL) {
-+        return (baseFetch as any)(req, { ...init, unix: unixSocket })
-+      }
-+      return (baseFetch as any)(req, { unix: unixSocket })
-     }
-+    // @ts-ignore
-+    if (req && typeof req === "object") req.timeout = false
-+    return (baseFetch as any)(req, init)
-+  }
-+
-+  config = {
-+    ...config,
-+    baseUrl,
-+    fetch: customFetch,
-   }
- 
-   if (config?.directory) {

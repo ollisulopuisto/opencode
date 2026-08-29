@@ -78,14 +78,16 @@ export const AttachCommand = cmd({
     const noReplay = args.replay === false || args.noReplay === true
 
     const directory = (() => {
-      if (!args.dir) return undefined
-      try {
-        process.chdir(args.dir)
-        return process.cwd()
-      } catch {
-        // If the directory doesn't exist locally (remote attach), pass it through.
-        return args.dir
+      if (args.dir) {
+        try {
+          process.chdir(args.dir)
+          return process.cwd()
+        } catch {
+          // If the directory doesn't exist locally (remote attach), pass it through.
+          return args.dir
+        }
       }
+      return process.cwd()
     })()
 
     if (args.mini) {
