@@ -166,7 +166,12 @@ for (const item of targets) {
     plugins: [plugin],
     external: ["node-gyp"],
     format: "esm",
-    minify: true,
+    minify: {
+      whitespace: true,
+      syntax: true,
+      identifiers: true,
+    },
+    bytecode: true,
     sourcemap: sourcemapsFlag ? "linked" : "none",
     splitting: true,
     compile: {
@@ -176,7 +181,7 @@ for (const item of targets) {
       autoloadPackageJson: true,
       target: name.replace(pkg.name, "bun") as any,
       outfile: `dist/${name}/bin/opencode`,
-      execArgv: [`--user-agent=opencode/${Script.version}`, "--use-system-ca", "--"],
+      execArgv: [`--user-agent=opencode/${Script.version}`, "--use-system-ca", "--smol", "--"],
       windows: {},
     },
     files: {
