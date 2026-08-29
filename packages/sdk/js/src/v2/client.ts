@@ -48,16 +48,38 @@ function rewrite(request: Request, values: { directory?: string; workspace?: str
 }
 
 export function createOpencodeClient(config?: Config & { directory?: string; experimental_workspaceID?: string }) {
-  if (!config?.fetch) {
-    const customFetch: any = (req: any) => {
-      // @ts-ignore
-      req.timeout = false
-      return fetch(req)
+  let baseUrl = config?.baseUrl
+  let unixSocket: string | undefined
+  if (baseUrl) {
+    if (baseUrl.startsWith("unix://")) {
+      unixSocket = baseUrl.slice(7)
+      baseUrl = "http://localhost"
+    } else if (baseUrl.startsWith("unix:")) {
+      unixSocket = baseUrl.slice(5)
+      baseUrl = "http://localhost"
+    } else if (baseUrl.startsWith("/") || baseUrl.startsWith("./")) {
+      unixSocket = baseUrl
+      baseUrl = "http://localhost"
     }
-    config = {
-      ...config,
-      fetch: customFetch,
+  }
+
+  const baseFetch = config?.fetch ?? fetch
+  const customFetch: any = (req: any, init?: any) => {
+    if (unixSocket) {
+      if (typeof req === "string" || req instanceof URL) {
+        return (baseFetch as any)(req, { ...init, unix: unixSocket })
+      }
+      return (baseFetch as any)(req, { unix: unixSocket })
     }
+    // @ts-ignore
+    if (req && typeof req === "object") req.timeout = false
+    return (baseFetch as any)(req, init)
+  }
+
+  config = {
+    ...config,
+    baseUrl,
+    fetch: customFetch,
   }
 
   if (config?.directory) {
