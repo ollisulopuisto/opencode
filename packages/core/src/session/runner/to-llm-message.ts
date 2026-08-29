@@ -36,14 +36,48 @@ const toolCall = (tool: SessionMessage.AssistantTool, providerMetadata: Provider
     providerMetadata,
   })
 
-const toolResult = (tool: SessionMessage.AssistantTool, providerMetadata: ProviderMetadata | undefined) => {
+const collapseHistoricalResult = (result: unknown, isHistorical: boolean) => {
+  if (!isHistorical || !result) return result
+  if (typeof result === "string" && result.length > 2048) {
+    const head = result.slice(0, 512)
+    const tail = result.slice(-512)
+    const omitted = result.length - 1024
+    return `${head}\n\n... [${omitted.toLocaleString()} bytes collapsed from historical turn] ...\n\n${tail}`
+  }
+  if (
+    typeof result === "object" &&
+    result !== null &&
+    "output" in result &&
+    typeof (result as Record<string, unknown>)["output"] === "string"
+  ) {
+    const output = (result as Record<string, unknown>)["output"] as string
+    if (output.length > 2048) {
+      const head = output.slice(0, 512)
+      const tail = output.slice(-512)
+      const omitted = output.length - 1024
+      return {
+        ...result,
+        output: `${head}\n\n... [${omitted.toLocaleString()} bytes collapsed from historical turn] ...\n\n${tail}`,
+        truncated: true,
+      }
+    }
+  }
+  return result
+}
+
+const toolResult = (
+  tool: SessionMessage.AssistantTool,
+  providerMetadata: ProviderMetadata | undefined,
+  isHistorical = false,
+) => {
   if (tool.state.status === "completed") {
     // TODO: Materialize remote and managed URIs before provider-history lowering.
     // ToolOutput.toResultValue rejects unresolved URIs rather than treating them as media bytes.
-    const result =
+    const rawResult =
       tool.provider?.executed === true && tool.state.result !== undefined
         ? tool.state.result
         : ToolOutput.toResultValue({ structured: tool.state.structured, content: tool.state.content })
+    const result = collapseHistoricalResult(rawResult, isHistorical)
     return ToolResultPart.make({
       id: tool.id,
       name: tool.name,
@@ -53,13 +87,15 @@ const toolResult = (tool: SessionMessage.AssistantTool, providerMetadata: Provid
     })
   }
   if (tool.state.status === "error") {
+    const rawResult =
+      tool.provider?.executed === true && tool.state.result !== undefined
+        ? tool.state.result
+        : { error: tool.state.error, content: tool.state.content, structured: tool.state.structured }
+    const result = collapseHistoricalResult(rawResult, isHistorical)
     return ToolResultPart.make({
       id: tool.id,
       name: tool.name,
-      result:
-        tool.provider?.executed === true && tool.state.result !== undefined
-          ? tool.state.result
-          : { error: tool.state.error, content: tool.state.content, structured: tool.state.structured },
+      result,
       resultType: "error",
       providerExecuted: tool.provider?.executed,
       providerMetadata,
@@ -67,7 +103,7 @@ const toolResult = (tool: SessionMessage.AssistantTool, providerMetadata: Provid
   }
 }
 
-const assistant = (message: SessionMessage.Assistant, model: Model) => {
+const assistant = (message: SessionMessage.Assistant, model: Model, isHistorical = false) => {
   const sameModel =
     String(message.model.providerID) === String(model.provider) && String(message.model.id) === String(model.id)
   const reuseProviderMetadata = sameModel && message.error === undefined
@@ -112,7 +148,7 @@ const assistant = (message: SessionMessage.Assistant, model: Model) => {
   ]
 }
 
-function toLLMMessage(message: SessionMessage.Message, model: Model): Message[] {
+function toLLMMessage(message: SessionMessage.Message, model: Model, isHistorical = false): Message[] {
   switch (message.type) {
     case "agent-switched":
     case "model-switched":
@@ -143,7 +179,7 @@ function toLLMMessage(message: SessionMessage.Message, model: Model): Message[] 
         }),
       ]
     case "assistant":
-      return assistant(message, model)
+      return assistant(message, model, isHistorical)
     case "compaction":
       return [
         Message.make({
@@ -167,5 +203,11 @@ ${message.recent}
 }
 
 /** Translate projected V2 Session history into canonical @opencode-ai/llm context. */
-export const toLLMMessages = (messages: readonly SessionMessage.Message[], model: Model) =>
-  messages.flatMap((message) => toLLMMessage(message, model))
+export const toLLMMessages = (messages: readonly SessionMessage.Message[], model: Model) => {
+  const total = messages.length
+  return messages.flatMap((message, index) => {
+    // Preserve full raw tool output for the last 2 roundtrip turns; collapse older turns
+    const isHistorical = index < total - 4
+    return toLLMMessage(message, model, isHistorical)
+  })
+}

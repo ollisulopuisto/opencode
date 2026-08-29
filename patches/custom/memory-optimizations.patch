@@ -1,40 +1,190 @@
-diff --git a/packages/core/src/database/sqlite.bun.ts b/packages/core/src/database/sqlite.bun.ts
-index e15f4c117..5de69b487 100644
---- a/packages/core/src/database/sqlite.bun.ts
-+++ b/packages/core/src/database/sqlite.bun.ts
-@@ -161,7 +161,14 @@ const nativeLayer = (config: Config) =>
-         create: config.create ?? true,
+diff --git a/packages/core/src/session/runner/llm.ts b/packages/core/src/session/runner/llm.ts
+index 874086a06..b412dcd41 100644
+--- a/packages/core/src/session/runner/llm.ts
++++ b/packages/core/src/session/runner/llm.ts
+@@ -216,7 +216,7 @@ const layer = Layer.effect(
+           .filter((part): part is string => part !== undefined && part.length > 0)
+           .map(SystemPart.make),
+         messages: [...toLLMMessages(context, model), ...(isLastStep ? [Message.assistant(MAX_STEPS_PROMPT)] : [])],
+-        tools: toolMaterialization?.definitions ?? [],
++        tools: (toolMaterialization?.definitions ?? []).slice().sort((a, b) => a.name.localeCompare(b.name)),
+         toolChoice: isLastStep ? "none" : undefined,
        })
-       yield* Effect.addFinalizer(() => Effect.sync(() => native.close()))
--      if (config.disableWAL !== true) native.run("PRAGMA journal_mode = WAL;")
-+      if (config.disableWAL !== true && config.readonly !== true) {
-+        native.run("PRAGMA journal_mode = WAL;")
-+        native.run("PRAGMA synchronous = NORMAL;")
-+        native.run("PRAGMA wal_autocheckpoint = 1000;")
-+        native.run("PRAGMA busy_timeout = 5000;")
-+        native.run("PRAGMA temp_store = MEMORY;")
-+        native.run("PRAGMA mmap_size = 268435456;")
+       if (yield* compaction.compactIfNeeded({ sessionID: session.id, entries, model, request }))
+diff --git a/packages/core/src/session/runner/to-llm-message.ts b/packages/core/src/session/runner/to-llm-message.ts
+index b2b1af5d3..d1cc5d75d 100644
+--- a/packages/core/src/session/runner/to-llm-message.ts
++++ b/packages/core/src/session/runner/to-llm-message.ts
+@@ -36,14 +36,48 @@ const toolCall = (tool: SessionMessage.AssistantTool, providerMetadata: Provider
+     providerMetadata,
+   })
+ 
+-const toolResult = (tool: SessionMessage.AssistantTool, providerMetadata: ProviderMetadata | undefined) => {
++const collapseHistoricalResult = (result: unknown, isHistorical: boolean) => {
++  if (!isHistorical || !result) return result
++  if (typeof result === "string" && result.length > 2048) {
++    const head = result.slice(0, 512)
++    const tail = result.slice(-512)
++    const omitted = result.length - 1024
++    return `${head}\n\n... [${omitted.toLocaleString()} bytes collapsed from historical turn] ...\n\n${tail}`
++  }
++  if (
++    typeof result === "object" &&
++    result !== null &&
++    "output" in result &&
++    typeof (result as Record<string, unknown>)["output"] === "string"
++  ) {
++    const output = (result as Record<string, unknown>)["output"] as string
++    if (output.length > 2048) {
++      const head = output.slice(0, 512)
++      const tail = output.slice(-512)
++      const omitted = output.length - 1024
++      return {
++        ...result,
++        output: `${head}\n\n... [${omitted.toLocaleString()} bytes collapsed from historical turn] ...\n\n${tail}`,
++        truncated: true,
 +      }
-       return native
-     }),
-   )
-diff --git a/packages/core/src/database/sqlite.node.ts b/packages/core/src/database/sqlite.node.ts
-index 6eaecbee2..4821ae928 100644
---- a/packages/core/src/database/sqlite.node.ts
-+++ b/packages/core/src/database/sqlite.node.ts
-@@ -156,7 +156,14 @@ const nativeLayer = (config: Config) =>
-         open: true,
-       })
-       yield* Effect.addFinalizer(() => Effect.sync(() => native.close()))
--      if (config.disableWAL !== true && config.readonly !== true) native.exec("PRAGMA journal_mode = WAL;")
-+      if (config.disableWAL !== true && config.readonly !== true) {
-+        native.exec("PRAGMA journal_mode = WAL;")
-+        native.exec("PRAGMA synchronous = NORMAL;")
-+        native.exec("PRAGMA wal_autocheckpoint = 1000;")
-+        native.exec("PRAGMA busy_timeout = 5000;")
-+        native.exec("PRAGMA temp_store = MEMORY;")
-+        native.exec("PRAGMA mmap_size = 268435456;")
-+      }
-       return native
-     }),
-   )
++    }
++  }
++  return result
++}
++
++const toolResult = (
++  tool: SessionMessage.AssistantTool,
++  providerMetadata: ProviderMetadata | undefined,
++  isHistorical = false,
++) => {
+   if (tool.state.status === "completed") {
+     // TODO: Materialize remote and managed URIs before provider-history lowering.
+     // ToolOutput.toResultValue rejects unresolved URIs rather than treating them as media bytes.
+-    const result =
++    const rawResult =
+       tool.provider?.executed === true && tool.state.result !== undefined
+         ? tool.state.result
+         : ToolOutput.toResultValue({ structured: tool.state.structured, content: tool.state.content })
++    const result = collapseHistoricalResult(rawResult, isHistorical)
+     return ToolResultPart.make({
+       id: tool.id,
+       name: tool.name,
+@@ -53,13 +87,15 @@ const toolResult = (tool: SessionMessage.AssistantTool, providerMetadata: Provid
+     })
+   }
+   if (tool.state.status === "error") {
++    const rawResult =
++      tool.provider?.executed === true && tool.state.result !== undefined
++        ? tool.state.result
++        : { error: tool.state.error, content: tool.state.content, structured: tool.state.structured }
++    const result = collapseHistoricalResult(rawResult, isHistorical)
+     return ToolResultPart.make({
+       id: tool.id,
+       name: tool.name,
+-      result:
+-        tool.provider?.executed === true && tool.state.result !== undefined
+-          ? tool.state.result
+-          : { error: tool.state.error, content: tool.state.content, structured: tool.state.structured },
++      result,
+       resultType: "error",
+       providerExecuted: tool.provider?.executed,
+       providerMetadata,
+@@ -67,7 +103,7 @@ const toolResult = (tool: SessionMessage.AssistantTool, providerMetadata: Provid
+   }
+ }
+ 
+-const assistant = (message: SessionMessage.Assistant, model: Model) => {
++const assistant = (message: SessionMessage.Assistant, model: Model, isHistorical = false) => {
+   const sameModel =
+     String(message.model.providerID) === String(model.provider) && String(message.model.id) === String(model.id)
+   const reuseProviderMetadata = sameModel && message.error === undefined
+@@ -112,7 +148,7 @@ const assistant = (message: SessionMessage.Assistant, model: Model) => {
+   ]
+ }
+ 
+-function toLLMMessage(message: SessionMessage.Message, model: Model): Message[] {
++function toLLMMessage(message: SessionMessage.Message, model: Model, isHistorical = false): Message[] {
+   switch (message.type) {
+     case "agent-switched":
+     case "model-switched":
+@@ -143,7 +179,7 @@ function toLLMMessage(message: SessionMessage.Message, model: Model): Message[]
+         }),
+       ]
+     case "assistant":
+-      return assistant(message, model)
++      return assistant(message, model, isHistorical)
+     case "compaction":
+       return [
+         Message.make({
+@@ -167,5 +203,11 @@ ${message.recent}
+ }
+ 
+ /** Translate projected V2 Session history into canonical @opencode-ai/llm context. */
+-export const toLLMMessages = (messages: readonly SessionMessage.Message[], model: Model) =>
+-  messages.flatMap((message) => toLLMMessage(message, model))
++export const toLLMMessages = (messages: readonly SessionMessage.Message[], model: Model) => {
++  const total = messages.length
++  return messages.flatMap((message, index) => {
++    // Preserve full raw tool output for the last 2 roundtrip turns; collapse older turns
++    const isHistorical = index < total - 4
++    return toLLMMessage(message, model, isHistorical)
++  })
++}
+diff --git a/packages/core/src/tool/bash.ts b/packages/core/src/tool/bash.ts
+index 22423764b..da7652a14 100644
+--- a/packages/core/src/tool/bash.ts
++++ b/packages/core/src/tool/bash.ts
+@@ -94,6 +94,17 @@ const externalCommandDirectories = Effect.fn("BashTool.externalCommandDirectorie
+   return [...directories]
+ })
+ 
++const formatHeadTailOutput = (text: string, maxBytes = 64 * 1024, headBytes = 4 * 1024, tailBytes = 20 * 1024) => {
++  if (text.length <= maxBytes) return { text, truncated: false }
++  const head = text.slice(0, headBytes)
++  const tail = text.slice(-tailBytes)
++  const omitted = text.length - headBytes - tailBytes
++  return {
++    text: `${head}\n\n... [${omitted.toLocaleString()} bytes omitted for brevity; full output recorded in logs] ...\n\n${tail}`,
++    truncated: true,
++  }
++}
++
+ const layer = Layer.effectDiscard(
+   Effect.gen(function* () {
+     const tools = yield* Tools.Service
+@@ -183,14 +194,15 @@ const layer = Layer.effectDiscard(
+                 }
+               }
+ 
+-              const output = result.output?.toString("utf8") || "(no output)"
+-              const notice = result.outputTruncated
++              const rawText = result.output?.toString("utf8") || "(no output)"
++              const { text: output, truncated } = formatHeadTailOutput(rawText)
++              const notice = result.outputTruncated || truncated
+                 ? "[output capture truncated at the in-memory safety limit]"
+                 : undefined
+               return {
+                 exit: result.exitCode,
+                 output: notice ? `${output}\n\n${notice}` : output,
+-                truncated: result.outputTruncated === true,
++                truncated: result.outputTruncated === true || truncated,
+                 ...(warnings.length ? { warnings } : {}),
+               }
+             }).pipe(Effect.mapError(() => new ToolFailure({ message: `Unable to execute command: ${input.command}` }))),
+diff --git a/packages/core/src/tool/builtins.ts b/packages/core/src/tool/builtins.ts
+index a55812437..f763c4ed1 100644
+--- a/packages/core/src/tool/builtins.ts
++++ b/packages/core/src/tool/builtins.ts
+@@ -4,6 +4,7 @@ import { makeLocationNode } from "../effect/app-node"
+ import { Layer } from "effect"
+ import { BashTool } from "./bash"
+ import { ApplyPatchTool } from "./apply-patch"
++import { DelegateTool } from "./delegate"
+ import { EditTool } from "./edit"
+ import { GlobTool } from "./glob"
+ import { GrepTool } from "./grep"
+@@ -34,6 +35,7 @@ export const node = makeLocationNode({
+   deps: [
+     ApplyPatchTool.node,
+     BashTool.node,
++    DelegateTool.node,
+     EditTool.node,
+     GlobTool.node,
+     GrepTool.node,
