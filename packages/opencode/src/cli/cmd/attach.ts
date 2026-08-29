@@ -96,6 +96,8 @@ export const AttachCommand = cmd({
       return root
     })()
 
+    console.error(`[attach-debug] targetUrl: ${targetUrl} | PWD: ${process.env.PWD} | cwd: ${process.cwd()} | directory: ${directory}`)
+
     if (args.mini) {
       const { runMini } = await import("./run")
       await runMini({

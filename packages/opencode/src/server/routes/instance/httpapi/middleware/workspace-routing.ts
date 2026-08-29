@@ -100,7 +100,9 @@ function decodeDir(input?: string): string | undefined {
 
 function defaultDirectory(request: HttpServerRequest.HttpServerRequest, url: URL): string {
   const dir = url.searchParams.get("directory") || request.headers["x-opencode-directory"]
-  return decodeDir(dir) || process.cwd()
+  const decoded = decodeDir(dir) || process.cwd()
+  console.error(`[server-debug] ${request.method} ${url.pathname}${url.search} raw-dir: "${dir}" -> decoded: "${decoded}"`)
+  return decoded
 }
 
 function shouldStayOnControlPlane(request: HttpServerRequest.HttpServerRequest, url: URL): boolean {

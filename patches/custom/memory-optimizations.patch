@@ -1,98 +1,40 @@
-diff --git a/packages/opencode/src/server/routes/instance/httpapi/middleware/instance-context.ts b/packages/opencode/src/server/routes/instance/httpapi/middleware/instance-context.ts
-index e39eb7394..ff6afa27d 100644
---- a/packages/opencode/src/server/routes/instance/httpapi/middleware/instance-context.ts
-+++ b/packages/opencode/src/server/routes/instance/httpapi/middleware/instance-context.ts
-@@ -13,11 +13,17 @@ export class InstanceContextMiddleware extends HttpApiMiddleware.Service<
- >()("@opencode/ExperimentalHttpApiInstanceContext") {}
+diff --git a/packages/opencode/src/cli/cmd/attach.ts b/packages/opencode/src/cli/cmd/attach.ts
+index bfd04de1f..c245b01eb 100644
+--- a/packages/opencode/src/cli/cmd/attach.ts
++++ b/packages/opencode/src/cli/cmd/attach.ts
+@@ -96,6 +96,8 @@ export const AttachCommand = cmd({
+       return root
+     })()
  
- function decode(input: string): string {
--  try {
--    return decodeURIComponent(input)
--  } catch {
--    return input
-+  let current = input
-+  while (current.includes("%")) {
-+    try {
-+      const next = decodeURIComponent(current)
-+      if (next === current) break
-+      current = next
-+    } catch {
-+      break
-+    }
-   }
-+  return current
- }
- 
- function provideInstanceContext<E>(
++    console.error(`[attach-debug] targetUrl: ${targetUrl} | PWD: ${process.env.PWD} | cwd: ${process.cwd()} | directory: ${directory}`)
++
+     if (args.mini) {
+       const { runMini } = await import("./run")
+       await runMini({
 diff --git a/packages/opencode/src/server/routes/instance/httpapi/middleware/workspace-routing.ts b/packages/opencode/src/server/routes/instance/httpapi/middleware/workspace-routing.ts
-index 764a568dd..3d64b36fb 100644
+index 3d64b36fb..2ad3c0520 100644
 --- a/packages/opencode/src/server/routes/instance/httpapi/middleware/workspace-routing.ts
 +++ b/packages/opencode/src/server/routes/instance/httpapi/middleware/workspace-routing.ts
-@@ -83,13 +83,19 @@ function selectedV2WorkspaceID(
-   return workspaceID.value
- }
- 
--function decodeDir(input?: string) {
-+function decodeDir(input?: string): string | undefined {
-   if (!input) return undefined
--  try {
--    return decodeURIComponent(input)
--  } catch {
--    return input
-+  let current = input
-+  while (current.includes("%")) {
-+    try {
-+      const next = decodeURIComponent(current)
-+      if (next === current) break
-+      current = next
-+    } catch {
-+      break
-+    }
-   }
-+  return current
- }
+@@ -100,7 +100,9 @@ function decodeDir(input?: string): string | undefined {
  
  function defaultDirectory(request: HttpServerRequest.HttpServerRequest, url: URL): string {
-diff --git a/packages/sdk/js/src/v2/client.ts b/packages/sdk/js/src/v2/client.ts
-index 0862473c7..db0fd41a1 100644
---- a/packages/sdk/js/src/v2/client.ts
-+++ b/packages/sdk/js/src/v2/client.ts
-@@ -25,11 +25,7 @@ function rewrite(request: Request, values: { directory?: string; workspace?: str
-     ["x-opencode-directory", "directory"],
-     ["x-opencode-workspace", "workspace"],
-   ] as const) {
--    const value = pick(
--      request.headers.get(name),
--      key === "directory" ? values.directory : values.workspace,
--      key === "directory" ? encodeURIComponent : undefined,
--    )
-+    const value = pick(request.headers.get(name), key === "directory" ? values.directory : values.workspace)
-     if (!value) continue
-     for (const query of url.pathname.startsWith("/api/") ? [key, `location[${key}]`] : [key]) {
-       if (!url.searchParams.has(query)) {
-diff --git a/packages/server/src/location.ts b/packages/server/src/location.ts
-index 8ae5aa6e6..323db4928 100644
---- a/packages/server/src/location.ts
-+++ b/packages/server/src/location.ts
-@@ -39,11 +39,17 @@ function ref(request: HttpServerRequest.HttpServerRequest): Location.Ref {
+   const dir = url.searchParams.get("directory") || request.headers["x-opencode-directory"]
+-  return decodeDir(dir) || process.cwd()
++  const decoded = decodeDir(dir) || process.cwd()
++  console.error(`[server-debug] ${request.method} ${url.pathname}${url.search} raw-dir: "${dir}" -> decoded: "${decoded}"`)
++  return decoded
  }
  
- function decode(input: string) {
--  try {
--    return decodeURIComponent(input)
--  } catch {
--    return input
-+  let current = input
-+  while (current.includes("%")) {
-+    try {
-+      const next = decodeURIComponent(current)
-+      if (next === current) break
-+      current = next
-+    } catch {
-+      break
-+    }
-   }
-+  return current
- }
- 
- export const layer = Layer.effect(
+ function shouldStayOnControlPlane(request: HttpServerRequest.HttpServerRequest, url: URL): boolean {
+diff --git a/packages/tui/src/context/project.tsx b/packages/tui/src/context/project.tsx
+index d73a17e7e..089b6eeba 100644
+--- a/packages/tui/src/context/project.tsx
++++ b/packages/tui/src/context/project.tsx
+@@ -44,6 +44,7 @@ export const { use: useProject, provider: ProjectProvider } = createSimpleContex
+       const directories = project.data?.id
+         ? await sdk.client.project.directories({ projectID: project.data.id, workspace })
+         : undefined
++      console.error(`[tui-debug] sync() sdk.url: ${sdk.url} | sdk.dir: ${sdk.directory} | project.worktree: ${project.data?.worktree} | instance.dir: ${instancePath.data?.directory}`)
+       batch(() => {
+         setStore("instance", "path", reconcile(instancePath.data || defaultPath))
+         setStore("project", "id", project.data?.id)

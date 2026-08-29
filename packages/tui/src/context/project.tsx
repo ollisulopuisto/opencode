@@ -44,6 +44,7 @@ export const { use: useProject, provider: ProjectProvider } = createSimpleContex
       const directories = project.data?.id
         ? await sdk.client.project.directories({ projectID: project.data.id, workspace })
         : undefined
+      console.error(`[tui-debug] sync() sdk.url: ${sdk.url} | sdk.dir: ${sdk.directory} | project.worktree: ${project.data?.worktree} | instance.dir: ${instancePath.data?.directory}`)
       batch(() => {
         setStore("instance", "path", reconcile(instancePath.data || defaultPath))
         setStore("project", "id", project.data?.id)
