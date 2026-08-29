@@ -1,44 +1,24 @@
-diff --git a/packages/opencode/src/cli/cmd/attach.ts b/packages/opencode/src/cli/cmd/attach.ts
-index 2e8038416..8c99d444b 100644
---- a/packages/opencode/src/cli/cmd/attach.ts
-+++ b/packages/opencode/src/cli/cmd/attach.ts
-@@ -1,4 +1,5 @@
- import { cmd } from "./cmd"
-+import path from "path"
- import { UI } from "@/cli/ui"
- import { errorMessage } from "@opencode-ai/tui/util/error"
- import { validateSession } from "../tui/validate-session"
-@@ -78,16 +79,18 @@ export const AttachCommand = cmd({
-     const noReplay = args.replay === false || args.noReplay === true
- 
-     const directory = (() => {
-+      const root = process.env.PWD ?? process.cwd()
-       if (args.dir) {
-         try {
--          process.chdir(args.dir)
-+          const resolved = path.isAbsolute(args.dir) ? args.dir : path.join(root, args.dir)
-+          process.chdir(resolved)
-           return process.cwd()
-         } catch {
-           // If the directory doesn't exist locally (remote attach), pass it through.
-           return args.dir
-         }
-       }
--      return process.cwd()
-+      return root
-     })()
- 
-     if (args.mini) {
-diff --git a/packages/opencode/src/cli/cmd/tui.ts b/packages/opencode/src/cli/cmd/tui.ts
-index 95ffac7ea..1c3b5bee1 100644
---- a/packages/opencode/src/cli/cmd/tui.ts
-+++ b/packages/opencode/src/cli/cmd/tui.ts
-@@ -66,7 +66,7 @@ async function input(value?: string) {
- export function resolveThreadDirectory(project?: string, envPWD = process.env.PWD, cwd = process.cwd()) {
-   const root = Filesystem.resolve(envPWD ?? cwd)
-   if (project) return Filesystem.resolve(path.isAbsolute(project) ? project : path.join(root, project))
--  return Filesystem.resolve(cwd)
-+  return root
+diff --git a/packages/opencode/src/server/routes/instance/httpapi/middleware/workspace-routing.ts b/packages/opencode/src/server/routes/instance/httpapi/middleware/workspace-routing.ts
+index 873abd834..764a568dd 100644
+--- a/packages/opencode/src/server/routes/instance/httpapi/middleware/workspace-routing.ts
++++ b/packages/opencode/src/server/routes/instance/httpapi/middleware/workspace-routing.ts
+@@ -83,8 +83,18 @@ function selectedV2WorkspaceID(
+   return workspaceID.value
  }
  
- export const TuiThreadCommand = cmd({
++function decodeDir(input?: string) {
++  if (!input) return undefined
++  try {
++    return decodeURIComponent(input)
++  } catch {
++    return input
++  }
++}
++
+ function defaultDirectory(request: HttpServerRequest.HttpServerRequest, url: URL): string {
+-  return url.searchParams.get("directory") || request.headers["x-opencode-directory"] || process.cwd()
++  const dir = url.searchParams.get("directory") || request.headers["x-opencode-directory"]
++  return decodeDir(dir) || process.cwd()
+ }
+ 
+ function shouldStayOnControlPlane(request: HttpServerRequest.HttpServerRequest, url: URL): boolean {

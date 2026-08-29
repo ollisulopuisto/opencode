@@ -83,8 +83,18 @@ function selectedV2WorkspaceID(
   return workspaceID.value
 }
 
+function decodeDir(input?: string) {
+  if (!input) return undefined
+  try {
+    return decodeURIComponent(input)
+  } catch {
+    return input
+  }
+}
+
 function defaultDirectory(request: HttpServerRequest.HttpServerRequest, url: URL): string {
-  return url.searchParams.get("directory") || request.headers["x-opencode-directory"] || process.cwd()
+  const dir = url.searchParams.get("directory") || request.headers["x-opencode-directory"]
+  return decodeDir(dir) || process.cwd()
 }
 
 function shouldStayOnControlPlane(request: HttpServerRequest.HttpServerRequest, url: URL): boolean {
