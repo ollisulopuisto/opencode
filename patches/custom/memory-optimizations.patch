@@ -1,0 +1,259 @@
+diff --git a/packages/core/src/database/database.ts b/packages/core/src/database/database.ts
+index d61adf047..fad80f8d9 100644
+--- a/packages/core/src/database/database.ts
++++ b/packages/core/src/database/database.ts
+@@ -24,10 +24,17 @@ const layer = Layer.effect(
+   Effect.gen(function* () {
+     const db = yield* makeDatabase
+ 
++    const isDarwinArm64 = process.platform === "darwin" && process.arch === "arm64"
+     yield* db.run("PRAGMA journal_mode = WAL")
+     yield* db.run("PRAGMA synchronous = NORMAL")
+-    yield* db.run("PRAGMA busy_timeout = 5000")
+-    yield* db.run("PRAGMA cache_size = -64000")
++    yield* db.run("PRAGMA busy_timeout = 15000")
++    yield* db.run("PRAGMA temp_store = MEMORY")
++    yield* db.run("PRAGMA wal_autocheckpoint = 1000")
++    yield* db.run(`PRAGMA cache_size = ${Flag.OPENCODE_DB_CACHE_SIZE ?? -4000}`)
++    yield* db.run(isDarwinArm64 ? "PRAGMA mmap_size = 268435456" : "PRAGMA mmap_size = 16777216")
++    if (isDarwinArm64) {
++      yield* db.run("PRAGMA page_size = 16384")
++    }
+     yield* db.run("PRAGMA foreign_keys = ON")
+     yield* db.run("PRAGMA wal_checkpoint(PASSIVE)")
+     yield* DatabaseMigration.apply(db)
+diff --git a/packages/core/src/flag/flag.ts b/packages/core/src/flag/flag.ts
+index a0eb78a13..4698077eb 100644
+--- a/packages/core/src/flag/flag.ts
++++ b/packages/core/src/flag/flag.ts
+@@ -54,6 +54,17 @@ export const Flag = {
+   get OPENCODE_DISABLE_PROJECT_CONFIG() {
+     return truthy("OPENCODE_DISABLE_PROJECT_CONFIG")
+   },
++  get OPENCODE_DB_CACHE_SIZE() {
++    const value = process.env["OPENCODE_DB_CACHE_SIZE"]
++    return value !== undefined ? Number(value) : -4000
++  },
++  get OPENCODE_DISABLE_LSP() {
++    return truthy("OPENCODE_DISABLE_LSP")
++  },
++  get OPENCODE_LSP_IDLE_TIMEOUT() {
++    const value = process.env["OPENCODE_LSP_IDLE_TIMEOUT"]
++    return value !== undefined ? Number(value) : 300000
++  },
+   get OPENCODE_EXPERIMENTAL_REFERENCES() {
+     return enabledByExperimental("OPENCODE_EXPERIMENTAL_REFERENCES")
+   },
+diff --git a/packages/opencode/src/index.ts b/packages/opencode/src/index.ts
+index 13540a73a..f343781c7 100644
+--- a/packages/opencode/src/index.ts
++++ b/packages/opencode/src/index.ts
+@@ -30,6 +30,10 @@ import { errorMessage } from "./util/error"
+ import { PluginCommand } from "./cli/cmd/plug"
+ import { Heap } from "./cli/heap"
+ 
++if (process.platform === "darwin") {
++  process.env["JSC_useConcurrentGC"] = process.env["JSC_useConcurrentGC"] ?? "1"
++}
++
+ const args = hideBin(process.argv)
+ 
+ function show(out: string) {
+diff --git a/packages/opencode/src/lsp/launch.ts b/packages/opencode/src/lsp/launch.ts
+index 4f687b197..1e2a52ff3 100644
+--- a/packages/opencode/src/lsp/launch.ts
++++ b/packages/opencode/src/lsp/launch.ts
+@@ -8,7 +8,8 @@ export function spawn(cmd: string, opts?: Process.Options): Child
+ export function spawn(cmd: string, argsOrOpts?: string[] | Process.Options, opts?: Process.Options) {
+   const args = Array.isArray(argsOrOpts) ? [...argsOrOpts] : []
+   const cfg = Array.isArray(argsOrOpts) ? opts : argsOrOpts
+-  const proc = Process.spawn([cmd, ...args], {
++  const command = process.platform === "darwin" ? ["taskpolicy", "-b", cmd, ...args] : [cmd, ...args]
++  const proc = Process.spawn(command, {
+     ...cfg,
+     stdin: "pipe",
+     stdout: "pipe",
+diff --git a/packages/opencode/src/lsp/lsp.ts b/packages/opencode/src/lsp/lsp.ts
+index 1ab3a0b82..ae4948fa3 100644
+--- a/packages/opencode/src/lsp/lsp.ts
++++ b/packages/opencode/src/lsp/lsp.ts
+@@ -1,5 +1,6 @@
+ import { LayerNode } from "@opencode-ai/core/effect/layer-node"
+ import { FSUtil } from "@opencode-ai/core/fs-util"
++import { Flag } from "@opencode-ai/core/flag/flag"
+ import { EventV2Bridge } from "@/event-v2-bridge"
+ import * as LSPClient from "./client"
+ import path from "path"
+@@ -114,6 +115,7 @@ interface State {
+   servers: Record<string, LSPServer.Info>
+   broken: Set<string>
+   spawning: Map<string, Promise<LSPClient.Info | undefined>>
++  lastUsed: Map<LSPClient.Info, number>
+ }
+ 
+ export interface Interface {
+@@ -148,7 +150,7 @@ const layer = Layer.effect(
+ 
+         const servers: Record<string, LSPServer.Info> = {}
+ 
+-        if (!cfg.lsp) {
++        if (Flag.OPENCODE_DISABLE_LSP || !cfg.lsp) {
+           yield* Effect.logInfo("all LSPs are disabled")
+         } else {
+           for (const server of Object.values(LSPServer)) {
+@@ -193,6 +195,7 @@ const layer = Layer.effect(
+           servers,
+           broken: new Set(),
+           spawning: new Map(),
++          lastUsed: new Map(),
+         }
+ 
+         yield* Effect.addFinalizer(() =>
+@@ -206,10 +209,27 @@ const layer = Layer.effect(
+     )
+ 
+     const getClients = Effect.fnUntraced(function* (file: string) {
++      if (Flag.OPENCODE_DISABLE_LSP) return [] as LSPClient.Info[]
+       const ctx = yield* InstanceState.context
+       if (!containsPath(file, ctx)) return [] as LSPClient.Info[]
+       const s = yield* InstanceState.get(state)
+       const clients = yield* Effect.promise(async () => {
++        const now = Date.now()
++        const timeout = Flag.OPENCODE_LSP_IDLE_TIMEOUT
++        if (timeout > 0 && s.clients.length > 0) {
++          const activeClients: LSPClient.Info[] = []
++          for (const client of s.clients) {
++            const last = s.lastUsed.get(client) ?? now
++            if (now - last > timeout) {
++              s.lastUsed.delete(client)
++              client.shutdown().catch(() => {})
++            } else {
++              activeClients.push(client)
++            }
++          }
++          s.clients = activeClients
++        }
++
+         const extension = path.parse(file).ext || file
+         const result: LSPClient.Info[] = []
+         let updated = 0
+@@ -244,10 +264,12 @@ const layer = Layer.effect(
+           const existing = s.clients.find((x) => x.root === root && x.serverID === server.id)
+           if (existing) {
+             await Process.stop(handle.process)
++            s.lastUsed.set(existing, Date.now())
+             return existing
+           }
+ 
+           s.clients.push(client)
++          s.lastUsed.set(client, Date.now())
+           return client
+         }
+ 
+@@ -260,6 +282,7 @@ const layer = Layer.effect(
+ 
+           const match = s.clients.find((x) => x.root === root && x.serverID === server.id)
+           if (match) {
++            s.lastUsed.set(match, Date.now())
+             result.push(match)
+             continue
+           }
+@@ -268,6 +291,7 @@ const layer = Layer.effect(
+           if (inflight) {
+             const client = await inflight
+             if (!client) continue
++            s.lastUsed.set(client, Date.now())
+             result.push(client)
+             continue
+           }
+@@ -284,6 +308,7 @@ const layer = Layer.effect(
+           const client = await task
+           if (!client) continue
+ 
++          s.lastUsed.set(client, Date.now())
+           result.push(client)
+           updated++
+         }
+@@ -311,6 +336,7 @@ const layer = Layer.effect(
+     })
+ 
+     const status = Effect.fn("LSP.status")(function* () {
++      if (Flag.OPENCODE_DISABLE_LSP) return [] as Status[]
+       const ctx = yield* InstanceState.context
+       const s = yield* InstanceState.get(state)
+       const result: Status[] = []
+@@ -326,6 +352,7 @@ const layer = Layer.effect(
+     })
+ 
+     const hasClients = Effect.fn("LSP.hasClients")(function* (file: string) {
++      if (Flag.OPENCODE_DISABLE_LSP) return false
+       const ctx = yield* InstanceState.context
+       const s = yield* InstanceState.get(state)
+       return yield* Effect.promise(async () => {
+diff --git a/packages/opencode/src/session/status.ts b/packages/opencode/src/session/status.ts
+index 11140acfe..b2a572181 100644
+--- a/packages/opencode/src/session/status.ts
++++ b/packages/opencode/src/session/status.ts
+@@ -42,6 +42,9 @@ const layer = Layer.effect(
+       if (status.type === "idle") {
+         yield* events.publish(Event.Idle, { sessionID })
+         data.delete(sessionID)
++        if (typeof Bun !== "undefined" && Bun.gc) {
++          Bun.gc(true)
++        }
+         return
+       }
+       data.set(sessionID, status)
+diff --git a/packages/tui/src/context/sync.tsx b/packages/tui/src/context/sync.tsx
+index 71e050d11..74f1a74ee 100644
+--- a/packages/tui/src/context/sync.tsx
++++ b/packages/tui/src/context/sync.tsx
+@@ -315,6 +315,9 @@ export const {
+ 
+         case "session.status": {
+           setStore("session_status", event.properties.sessionID, event.properties.status)
++          if (event.properties.status.type === "idle" && typeof Bun !== "undefined" && Bun.gc) {
++            Bun.gc(false)
++          }
+           break
+         }
+ 
+@@ -600,7 +603,7 @@ export const {
+           const task = (async () => {
+             const [session, messages, todo, diff] = await Promise.all([
+               sdk.client.session.get({ sessionID }, { throwOnError: true }),
+-              sdk.client.session.messages({ sessionID, limit: 100 }),
++              sdk.client.session.messages({ sessionID, limit: 40 }),
+               sdk.client.session.todo({ sessionID }),
+               sdk.client.session.diff({ sessionID }),
+             ])
+@@ -622,8 +625,8 @@ export const {
+                   ),
+                 )
+                 infos.sort(compareMessage)
+-                const removed = infos.slice(0, -100)
+-                const visible = infos.slice(-100)
++                const removed = infos.slice(0, -40)
++                const visible = infos.slice(-40)
+                 const visibleIDs = new Set(visible.map((message) => message.id))
+                 for (const message of messages.data ?? []) {
+                   if (!visibleIDs.has(message.info.id)) {
+@@ -655,6 +658,18 @@ export const {
+                 for (const message of removed) delete draft.part[message.id]
+                 draft.message[sessionID] = visible
+                 draft.session_diff[sessionID] = diff.data ?? []
++
++                if (fullSyncedSessions.size >= 4) {
++                  const oldestSessionID = fullSyncedSessions.values().next().value
++                  if (oldestSessionID && oldestSessionID !== sessionID) {
++                    fullSyncedSessions.delete(oldestSessionID)
++                    const oldMessages = draft.message[oldestSessionID] ?? []
++                    for (const m of oldMessages) delete draft.part[m.id]
++                    delete draft.message[oldestSessionID]
++                    delete draft.todo[oldestSessionID]
++                    delete draft.session_diff[oldestSessionID]
++                  }
++                }
+               }),
+             )
+             fullSyncedSessions.add(sessionID)

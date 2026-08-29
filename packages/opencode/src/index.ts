@@ -30,6 +30,10 @@ import { errorMessage } from "./util/error"
 import { PluginCommand } from "./cli/cmd/plug"
 import { Heap } from "./cli/heap"
 
+if (process.platform === "darwin") {
+  process.env["JSC_useConcurrentGC"] = process.env["JSC_useConcurrentGC"] ?? "1"
+}
+
 const args = hideBin(process.argv)
 
 function show(out: string) {

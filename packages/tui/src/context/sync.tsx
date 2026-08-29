@@ -315,6 +315,9 @@ export const {
 
         case "session.status": {
           setStore("session_status", event.properties.sessionID, event.properties.status)
+          if (event.properties.status.type === "idle" && typeof Bun !== "undefined" && Bun.gc) {
+            Bun.gc(false)
+          }
           break
         }
 
@@ -600,7 +603,7 @@ export const {
           const task = (async () => {
             const [session, messages, todo, diff] = await Promise.all([
               sdk.client.session.get({ sessionID }, { throwOnError: true }),
-              sdk.client.session.messages({ sessionID, limit: 100 }),
+              sdk.client.session.messages({ sessionID, limit: 40 }),
               sdk.client.session.todo({ sessionID }),
               sdk.client.session.diff({ sessionID }),
             ])
@@ -622,8 +625,8 @@ export const {
                   ),
                 )
                 infos.sort(compareMessage)
-                const removed = infos.slice(0, -100)
-                const visible = infos.slice(-100)
+                const removed = infos.slice(0, -40)
+                const visible = infos.slice(-40)
                 const visibleIDs = new Set(visible.map((message) => message.id))
                 for (const message of messages.data ?? []) {
                   if (!visibleIDs.has(message.info.id)) {
@@ -655,6 +658,18 @@ export const {
                 for (const message of removed) delete draft.part[message.id]
                 draft.message[sessionID] = visible
                 draft.session_diff[sessionID] = diff.data ?? []
+
+                if (fullSyncedSessions.size >= 4) {
+                  const oldestSessionID = fullSyncedSessions.values().next().value
+                  if (oldestSessionID && oldestSessionID !== sessionID) {
+                    fullSyncedSessions.delete(oldestSessionID)
+                    const oldMessages = draft.message[oldestSessionID] ?? []
+                    for (const m of oldMessages) delete draft.part[m.id]
+                    delete draft.message[oldestSessionID]
+                    delete draft.todo[oldestSessionID]
+                    delete draft.session_diff[oldestSessionID]
+                  }
+                }
               }),
             )
             fullSyncedSessions.add(sessionID)

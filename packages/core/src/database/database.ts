@@ -24,10 +24,17 @@ const layer = Layer.effect(
   Effect.gen(function* () {
     const db = yield* makeDatabase
 
+    const isDarwinArm64 = process.platform === "darwin" && process.arch === "arm64"
     yield* db.run("PRAGMA journal_mode = WAL")
     yield* db.run("PRAGMA synchronous = NORMAL")
-    yield* db.run("PRAGMA busy_timeout = 5000")
-    yield* db.run("PRAGMA cache_size = -64000")
+    yield* db.run("PRAGMA busy_timeout = 15000")
+    yield* db.run("PRAGMA temp_store = MEMORY")
+    yield* db.run("PRAGMA wal_autocheckpoint = 1000")
+    yield* db.run(`PRAGMA cache_size = ${Flag.OPENCODE_DB_CACHE_SIZE ?? -4000}`)
+    yield* db.run(isDarwinArm64 ? "PRAGMA mmap_size = 268435456" : "PRAGMA mmap_size = 16777216")
+    if (isDarwinArm64) {
+      yield* db.run("PRAGMA page_size = 16384")
+    }
     yield* db.run("PRAGMA foreign_keys = ON")
     yield* db.run("PRAGMA wal_checkpoint(PASSIVE)")
     yield* DatabaseMigration.apply(db)

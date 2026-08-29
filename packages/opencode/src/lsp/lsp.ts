@@ -1,5 +1,6 @@
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { FSUtil } from "@opencode-ai/core/fs-util"
+import { Flag } from "@opencode-ai/core/flag/flag"
 import { EventV2Bridge } from "@/event-v2-bridge"
 import * as LSPClient from "./client"
 import path from "path"
@@ -114,6 +115,7 @@ interface State {
   servers: Record<string, LSPServer.Info>
   broken: Set<string>
   spawning: Map<string, Promise<LSPClient.Info | undefined>>
+  lastUsed: Map<LSPClient.Info, number>
 }
 
 export interface Interface {
@@ -148,7 +150,7 @@ const layer = Layer.effect(
 
         const servers: Record<string, LSPServer.Info> = {}
 
-        if (!cfg.lsp) {
+        if (Flag.OPENCODE_DISABLE_LSP || !cfg.lsp) {
           yield* Effect.logInfo("all LSPs are disabled")
         } else {
           for (const server of Object.values(LSPServer)) {
@@ -193,6 +195,7 @@ const layer = Layer.effect(
           servers,
           broken: new Set(),
           spawning: new Map(),
+          lastUsed: new Map(),
         }
 
         yield* Effect.addFinalizer(() =>
@@ -206,10 +209,27 @@ const layer = Layer.effect(
     )
 
     const getClients = Effect.fnUntraced(function* (file: string) {
+      if (Flag.OPENCODE_DISABLE_LSP) return [] as LSPClient.Info[]
       const ctx = yield* InstanceState.context
       if (!containsPath(file, ctx)) return [] as LSPClient.Info[]
       const s = yield* InstanceState.get(state)
       const clients = yield* Effect.promise(async () => {
+        const now = Date.now()
+        const timeout = Flag.OPENCODE_LSP_IDLE_TIMEOUT
+        if (timeout > 0 && s.clients.length > 0) {
+          const activeClients: LSPClient.Info[] = []
+          for (const client of s.clients) {
+            const last = s.lastUsed.get(client) ?? now
+            if (now - last > timeout) {
+              s.lastUsed.delete(client)
+              client.shutdown().catch(() => {})
+            } else {
+              activeClients.push(client)
+            }
+          }
+          s.clients = activeClients
+        }
+
         const extension = path.parse(file).ext || file
         const result: LSPClient.Info[] = []
         let updated = 0
@@ -244,10 +264,12 @@ const layer = Layer.effect(
           const existing = s.clients.find((x) => x.root === root && x.serverID === server.id)
           if (existing) {
             await Process.stop(handle.process)
+            s.lastUsed.set(existing, Date.now())
             return existing
           }
 
           s.clients.push(client)
+          s.lastUsed.set(client, Date.now())
           return client
         }
 
@@ -260,6 +282,7 @@ const layer = Layer.effect(
 
           const match = s.clients.find((x) => x.root === root && x.serverID === server.id)
           if (match) {
+            s.lastUsed.set(match, Date.now())
             result.push(match)
             continue
           }
@@ -268,6 +291,7 @@ const layer = Layer.effect(
           if (inflight) {
             const client = await inflight
             if (!client) continue
+            s.lastUsed.set(client, Date.now())
             result.push(client)
             continue
           }
@@ -284,6 +308,7 @@ const layer = Layer.effect(
           const client = await task
           if (!client) continue
 
+          s.lastUsed.set(client, Date.now())
           result.push(client)
           updated++
         }
@@ -311,6 +336,7 @@ const layer = Layer.effect(
     })
 
     const status = Effect.fn("LSP.status")(function* () {
+      if (Flag.OPENCODE_DISABLE_LSP) return [] as Status[]
       const ctx = yield* InstanceState.context
       const s = yield* InstanceState.get(state)
       const result: Status[] = []
@@ -326,6 +352,7 @@ const layer = Layer.effect(
     })
 
     const hasClients = Effect.fn("LSP.hasClients")(function* (file: string) {
+      if (Flag.OPENCODE_DISABLE_LSP) return false
       const ctx = yield* InstanceState.context
       const s = yield* InstanceState.get(state)
       return yield* Effect.promise(async () => {

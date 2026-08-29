@@ -42,6 +42,9 @@ const layer = Layer.effect(
       if (status.type === "idle") {
         yield* events.publish(Event.Idle, { sessionID })
         data.delete(sessionID)
+        if (typeof Bun !== "undefined" && Bun.gc) {
+          Bun.gc(true)
+        }
         return
       }
       data.set(sessionID, status)

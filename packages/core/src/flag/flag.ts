@@ -54,6 +54,17 @@ export const Flag = {
   get OPENCODE_DISABLE_PROJECT_CONFIG() {
     return truthy("OPENCODE_DISABLE_PROJECT_CONFIG")
   },
+  get OPENCODE_DB_CACHE_SIZE() {
+    const value = process.env["OPENCODE_DB_CACHE_SIZE"]
+    return value !== undefined ? Number(value) : -4000
+  },
+  get OPENCODE_DISABLE_LSP() {
+    return truthy("OPENCODE_DISABLE_LSP")
+  },
+  get OPENCODE_LSP_IDLE_TIMEOUT() {
+    const value = process.env["OPENCODE_LSP_IDLE_TIMEOUT"]
+    return value !== undefined ? Number(value) : 300000
+  },
   get OPENCODE_EXPERIMENTAL_REFERENCES() {
     return enabledByExperimental("OPENCODE_EXPERIMENTAL_REFERENCES")
   },

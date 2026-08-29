@@ -1,0 +1,217 @@
+name: Sync Upstream & Apply Patch
+
+on:
+  schedule:
+    # Runs weekly on Sundays at 02:00 UTC (max once a week)
+    - cron: "0 2 * * 0"
+  workflow_dispatch:
+    inputs:
+      upstream_ref:
+        description: "Upstream tag or branch to sync (e.g. latest, v1.18.25, dev)"
+        required: false
+        default: "latest"
+      force_build:
+        description: "Force rebuild even if this version was already patched/released"
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: sync-upstream-patch
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  UPSTREAM_REPO: "anomalyco/opencode"
+
+jobs:
+  check-version:
+    runs-on: ubuntu-latest
+    outputs:
+      should_build: ${{ steps.check.outputs.should_build }}
+      version: ${{ steps.check.outputs.version }}
+      tag_name: ${{ steps.check.outputs.tag_name }}
+      release_tag: ${{ steps.check.outputs.release_tag }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine upstream version
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_REF: ${{ inputs.upstream_ref || 'latest' }}
+          FORCE: ${{ inputs.force_build || 'false' }}
+        run: |
+          if [ "$INPUT_REF" = "latest" ] || [ -z "$INPUT_REF" ]; then
+            UPSTREAM_TAG=$(gh release view --repo "$UPSTREAM_REPO" --json tagName --jq .tagName 2>/dev/null || true)
+            if [ -z "$UPSTREAM_TAG" ]; then
+              UPSTREAM_TAG=$(gh api "repos/${UPSTREAM_REPO}/releases/latest" --jq .tag_name 2>/dev/null || true)
+            fi
+            if [ -z "$UPSTREAM_TAG" ]; then
+              echo "Failed to query latest release tag from $UPSTREAM_REPO" >&2
+              exit 1
+            fi
+          else
+            UPSTREAM_TAG="$INPUT_REF"
+          fi
+
+          VERSION="${UPSTREAM_TAG#v}"
+          PATCHED_TAG="v${VERSION}-patched"
+
+          echo "Found upstream tag: $UPSTREAM_TAG (version: $VERSION)"
+          echo "Target patched tag: $PATCHED_TAG"
+
+          # Check if this patched release tag already exists on current fork
+          TAG_EXISTS=false
+          if gh release view "$PATCHED_TAG" >/dev/null 2>&1 || git rev-parse "$PATCHED_TAG" >/dev/null 2>&1; then
+            TAG_EXISTS=true
+          fi
+
+          if [ "$TAG_EXISTS" = "true" ] && [ "$FORCE" != "true" ] && [ "${{ github.event_name }}" = "schedule" ]; then
+            echo "Release $PATCHED_TAG already exists and force_build is false. Skipping build."
+            echo "should_build=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+          fi
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag_name=$UPSTREAM_TAG" >> "$GITHUB_OUTPUT"
+          echo "release_tag=$PATCHED_TAG" >> "$GITHUB_OUTPUT"
+
+  build-and-release:
+    needs: check-version
+    if: needs.check-version.outputs.should_build == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout fork repository (to retrieve patch and scripts)
+        uses: actions/checkout@v4
+        with:
+          path: fork-repo
+          fetch-depth: 0
+
+      - name: Fetch upstream and checkout target ref
+        id: upstream-checkout
+        run: |
+          mkdir -p workspace
+          cd workspace
+          git init
+          git remote add upstream "https://github.com/${UPSTREAM_REPO}.git"
+          git remote add origin "https://github.com/${{ github.repository }}.git"
+          git fetch upstream --tags --depth=10 "refs/tags/${{ needs.check-version.outputs.tag_name }}:refs/tags/${{ needs.check-version.outputs.tag_name }}" || \
+          git fetch upstream --depth=10 "${{ needs.check-version.outputs.tag_name }}"
+          git checkout -B patched-build "${{ needs.check-version.outputs.tag_name }}"
+
+      - name: Apply custom patch
+        working-directory: workspace
+        run: |
+          PATCH_FILE="${{ github.workspace }}/fork-repo/patches/custom/memory-optimizations.patch"
+          if [ ! -f "$PATCH_FILE" ]; then
+            echo "Patch file not found at $PATCH_FILE" >&2
+            exit 1
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          echo "Applying patch: $PATCH_FILE"
+          if git apply --check "$PATCH_FILE"; then
+            git apply "$PATCH_FILE"
+          else
+            echo "Standard apply failed, trying 3-way merge apply..."
+            git apply --3way "$PATCH_FILE"
+          fi
+
+          git add -A
+          git commit -m "feat(custom): apply memory optimizations for ${{ needs.check-version.outputs.tag_name }}"
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        working-directory: workspace
+        run: |
+          bun install
+
+      - name: Typecheck
+        working-directory: workspace
+        run: |
+          bun --cwd packages/core typecheck
+          bun --cwd packages/opencode typecheck
+          bun --cwd packages/tui typecheck
+
+      - name: Build binaries
+        working-directory: workspace
+        env:
+          OPENCODE_VERSION: ${{ needs.check-version.outputs.version }}
+          OPENCODE_RELEASE: "true"
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Build binaries across targets using opencode build script
+          ./packages/opencode/script/build.ts
+
+          # Package binaries into archives
+          mkdir -p dist-release
+          cd dist
+          for dir in opencode-*/; do
+            target="${dir%/}"
+            if [ -d "$dir/bin" ]; then
+              if [[ "$target" == *"linux"* ]]; then
+                tar -czf "../dist-release/${target}.tar.gz" -C "$dir/bin" .
+              else
+                (cd "$dir/bin" && zip -r "../../dist-release/${target}.zip" .)
+              fi
+            fi
+          done
+
+      - name: Push patched branch to fork
+        working-directory: workspace
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
+          git push origin patched-build:refs/heads/patched --force
+          git push origin patched-build:refs/heads/patched-${{ needs.check-version.outputs.version }} --force || true
+
+      - name: Create GitHub Release
+        working-directory: workspace
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          RELEASE_TAG="${{ needs.check-version.outputs.release_tag }}"
+          UPSTREAM_TAG="${{ needs.check-version.outputs.tag_name }}"
+          
+          # Delete existing release/tag if re-running forced
+          gh release delete "$RELEASE_TAG" --yes --repo "${{ github.repository }}" 2>/dev/null || true
+          git push origin ":refs/tags/$RELEASE_TAG" 2>/dev/null || true
+
+          BODY="## Patched OpenCode ${UPSTREAM_TAG}
+
+Automated build syncing upstream [${UPSTREAM_TAG}](https://github.com/${UPSTREAM_REPO}/releases/tag/${UPSTREAM_TAG}) with custom persistent memory optimizations:
+
+- **Database Cache & MMAP**: Reduced SQLite cache size default (\`-4000\`, ~4MB) with \`OPENCODE_DB_CACHE_SIZE\` environment variable support and \`PRAGMA mmap_size = 16777216\`.
+- **Garbage Collection on Idle**: Proactive \`Bun.gc()\` triggering when sessions transition to idle.
+- **TUI State & Message Limits**: Optimized message history limit (40 messages) and active session cache pruning.
+
+### Assets
+Download the binary for your operating system and architecture below."
+
+          gh release create "$RELEASE_TAG" \
+            dist-release/* \
+            --title "OpenCode ${UPSTREAM_TAG} (Patched)" \
+            --notes "$BODY" \
+            --repo "${{ github.repository }}"
