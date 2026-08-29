@@ -13,11 +13,17 @@ export class InstanceContextMiddleware extends HttpApiMiddleware.Service<
 >()("@opencode/ExperimentalHttpApiInstanceContext") {}
 
 function decode(input: string): string {
-  try {
-    return decodeURIComponent(input)
-  } catch {
-    return input
+  let current = input
+  while (current.includes("%")) {
+    try {
+      const next = decodeURIComponent(current)
+      if (next === current) break
+      current = next
+    } catch {
+      break
+    }
   }
+  return current
 }
 
 function provideInstanceContext<E>(

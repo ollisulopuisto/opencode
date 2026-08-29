@@ -83,13 +83,19 @@ function selectedV2WorkspaceID(
   return workspaceID.value
 }
 
-function decodeDir(input?: string) {
+function decodeDir(input?: string): string | undefined {
   if (!input) return undefined
-  try {
-    return decodeURIComponent(input)
-  } catch {
-    return input
+  let current = input
+  while (current.includes("%")) {
+    try {
+      const next = decodeURIComponent(current)
+      if (next === current) break
+      current = next
+    } catch {
+      break
+    }
   }
+  return current
 }
 
 function defaultDirectory(request: HttpServerRequest.HttpServerRequest, url: URL): string {

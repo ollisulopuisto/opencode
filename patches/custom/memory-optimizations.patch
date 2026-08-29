@@ -1,40 +1,98 @@
-diff --git a/packages/opencode/src/cli/cmd/attach.ts b/packages/opencode/src/cli/cmd/attach.ts
-index 8c99d444b..bfd04de1f 100644
---- a/packages/opencode/src/cli/cmd/attach.ts
-+++ b/packages/opencode/src/cli/cmd/attach.ts
-@@ -90,6 +90,9 @@ export const AttachCommand = cmd({
-           return args.dir
-         }
-       }
-+      try {
-+        process.chdir(root)
-+      } catch {}
-       return root
-     })()
+diff --git a/packages/opencode/src/server/routes/instance/httpapi/middleware/instance-context.ts b/packages/opencode/src/server/routes/instance/httpapi/middleware/instance-context.ts
+index e39eb7394..ff6afa27d 100644
+--- a/packages/opencode/src/server/routes/instance/httpapi/middleware/instance-context.ts
++++ b/packages/opencode/src/server/routes/instance/httpapi/middleware/instance-context.ts
+@@ -13,11 +13,17 @@ export class InstanceContextMiddleware extends HttpApiMiddleware.Service<
+ >()("@opencode/ExperimentalHttpApiInstanceContext") {}
  
-diff --git a/packages/tui/src/app.tsx b/packages/tui/src/app.tsx
-index 57f372ef7..ae5ff3f87 100644
---- a/packages/tui/src/app.tsx
-+++ b/packages/tui/src/app.tsx
-@@ -255,7 +255,7 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
-                 <ErrorBoundary fallback={(error, reset) => <ErrorComponent error={error} reset={reset} mode={mode} />}>
-                   <TuiPathsProvider
-                     value={{
--                      cwd: process.cwd(),
-+                      cwd: input.directory ?? process.env.PWD ?? process.cwd(),
-                       home: global.home,
-                       state: global.state,
-                       worktree: global.data + "/worktree",
-diff --git a/packages/tui/src/context/data.tsx b/packages/tui/src/context/data.tsx
-index 9b2e58907..f64d686ad 100644
---- a/packages/tui/src/context/data.tsx
-+++ b/packages/tui/src/context/data.tsx
-@@ -74,7 +74,7 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
-     const sdk = useSDK()
-     const events = useEvent()
-     const [defaultLocation, setDefaultLocation] = createSignal<LocationRef>({
--      directory: sdk.directory ?? process.cwd(),
-+      directory: sdk.directory ?? process.env.PWD ?? process.cwd(),
-     })
+ function decode(input: string): string {
+-  try {
+-    return decodeURIComponent(input)
+-  } catch {
+-    return input
++  let current = input
++  while (current.includes("%")) {
++    try {
++      const next = decodeURIComponent(current)
++      if (next === current) break
++      current = next
++    } catch {
++      break
++    }
+   }
++  return current
+ }
  
-     const message = {
+ function provideInstanceContext<E>(
+diff --git a/packages/opencode/src/server/routes/instance/httpapi/middleware/workspace-routing.ts b/packages/opencode/src/server/routes/instance/httpapi/middleware/workspace-routing.ts
+index 764a568dd..3d64b36fb 100644
+--- a/packages/opencode/src/server/routes/instance/httpapi/middleware/workspace-routing.ts
++++ b/packages/opencode/src/server/routes/instance/httpapi/middleware/workspace-routing.ts
+@@ -83,13 +83,19 @@ function selectedV2WorkspaceID(
+   return workspaceID.value
+ }
+ 
+-function decodeDir(input?: string) {
++function decodeDir(input?: string): string | undefined {
+   if (!input) return undefined
+-  try {
+-    return decodeURIComponent(input)
+-  } catch {
+-    return input
++  let current = input
++  while (current.includes("%")) {
++    try {
++      const next = decodeURIComponent(current)
++      if (next === current) break
++      current = next
++    } catch {
++      break
++    }
+   }
++  return current
+ }
+ 
+ function defaultDirectory(request: HttpServerRequest.HttpServerRequest, url: URL): string {
+diff --git a/packages/sdk/js/src/v2/client.ts b/packages/sdk/js/src/v2/client.ts
+index 0862473c7..db0fd41a1 100644
+--- a/packages/sdk/js/src/v2/client.ts
++++ b/packages/sdk/js/src/v2/client.ts
+@@ -25,11 +25,7 @@ function rewrite(request: Request, values: { directory?: string; workspace?: str
+     ["x-opencode-directory", "directory"],
+     ["x-opencode-workspace", "workspace"],
+   ] as const) {
+-    const value = pick(
+-      request.headers.get(name),
+-      key === "directory" ? values.directory : values.workspace,
+-      key === "directory" ? encodeURIComponent : undefined,
+-    )
++    const value = pick(request.headers.get(name), key === "directory" ? values.directory : values.workspace)
+     if (!value) continue
+     for (const query of url.pathname.startsWith("/api/") ? [key, `location[${key}]`] : [key]) {
+       if (!url.searchParams.has(query)) {
+diff --git a/packages/server/src/location.ts b/packages/server/src/location.ts
+index 8ae5aa6e6..323db4928 100644
+--- a/packages/server/src/location.ts
++++ b/packages/server/src/location.ts
+@@ -39,11 +39,17 @@ function ref(request: HttpServerRequest.HttpServerRequest): Location.Ref {
+ }
+ 
+ function decode(input: string) {
+-  try {
+-    return decodeURIComponent(input)
+-  } catch {
+-    return input
++  let current = input
++  while (current.includes("%")) {
++    try {
++      const next = decodeURIComponent(current)
++      if (next === current) break
++      current = next
++    } catch {
++      break
++    }
+   }
++  return current
+ }
+ 
+ export const layer = Layer.effect(

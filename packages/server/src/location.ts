@@ -39,11 +39,17 @@ function ref(request: HttpServerRequest.HttpServerRequest): Location.Ref {
 }
 
 function decode(input: string) {
-  try {
-    return decodeURIComponent(input)
-  } catch {
-    return input
+  let current = input
+  while (current.includes("%")) {
+    try {
+      const next = decodeURIComponent(current)
+      if (next === current) break
+      current = next
+    } catch {
+      break
+    }
   }
+  return current
 }
 
 export const layer = Layer.effect(

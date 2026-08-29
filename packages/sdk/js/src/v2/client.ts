@@ -25,11 +25,7 @@ function rewrite(request: Request, values: { directory?: string; workspace?: str
     ["x-opencode-directory", "directory"],
     ["x-opencode-workspace", "workspace"],
   ] as const) {
-    const value = pick(
-      request.headers.get(name),
-      key === "directory" ? values.directory : values.workspace,
-      key === "directory" ? encodeURIComponent : undefined,
-    )
+    const value = pick(request.headers.get(name), key === "directory" ? values.directory : values.workspace)
     if (!value) continue
     for (const query of url.pathname.startsWith("/api/") ? [key, `location[${key}]`] : [key]) {
       if (!url.searchParams.has(query)) {
