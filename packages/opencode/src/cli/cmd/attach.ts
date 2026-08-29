@@ -90,6 +90,9 @@ export const AttachCommand = cmd({
           return args.dir
         }
       }
+      try {
+        process.chdir(root)
+      } catch {}
       return root
     })()
 

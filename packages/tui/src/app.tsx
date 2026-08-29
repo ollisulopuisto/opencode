@@ -255,7 +255,7 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
                 <ErrorBoundary fallback={(error, reset) => <ErrorComponent error={error} reset={reset} mode={mode} />}>
                   <TuiPathsProvider
                     value={{
-                      cwd: process.cwd(),
+                      cwd: input.directory ?? process.env.PWD ?? process.cwd(),
                       home: global.home,
                       state: global.state,
                       worktree: global.data + "/worktree",

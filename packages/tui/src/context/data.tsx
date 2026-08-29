@@ -74,7 +74,7 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
     const sdk = useSDK()
     const events = useEvent()
     const [defaultLocation, setDefaultLocation] = createSignal<LocationRef>({
-      directory: sdk.directory ?? process.cwd(),
+      directory: sdk.directory ?? process.env.PWD ?? process.cwd(),
     })
 
     const message = {

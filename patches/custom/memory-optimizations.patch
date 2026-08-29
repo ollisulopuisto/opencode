@@ -1,24 +1,40 @@
-diff --git a/packages/opencode/src/server/routes/instance/httpapi/middleware/workspace-routing.ts b/packages/opencode/src/server/routes/instance/httpapi/middleware/workspace-routing.ts
-index 873abd834..764a568dd 100644
---- a/packages/opencode/src/server/routes/instance/httpapi/middleware/workspace-routing.ts
-+++ b/packages/opencode/src/server/routes/instance/httpapi/middleware/workspace-routing.ts
-@@ -83,8 +83,18 @@ function selectedV2WorkspaceID(
-   return workspaceID.value
- }
+diff --git a/packages/opencode/src/cli/cmd/attach.ts b/packages/opencode/src/cli/cmd/attach.ts
+index 8c99d444b..bfd04de1f 100644
+--- a/packages/opencode/src/cli/cmd/attach.ts
++++ b/packages/opencode/src/cli/cmd/attach.ts
+@@ -90,6 +90,9 @@ export const AttachCommand = cmd({
+           return args.dir
+         }
+       }
++      try {
++        process.chdir(root)
++      } catch {}
+       return root
+     })()
  
-+function decodeDir(input?: string) {
-+  if (!input) return undefined
-+  try {
-+    return decodeURIComponent(input)
-+  } catch {
-+    return input
-+  }
-+}
-+
- function defaultDirectory(request: HttpServerRequest.HttpServerRequest, url: URL): string {
--  return url.searchParams.get("directory") || request.headers["x-opencode-directory"] || process.cwd()
-+  const dir = url.searchParams.get("directory") || request.headers["x-opencode-directory"]
-+  return decodeDir(dir) || process.cwd()
- }
+diff --git a/packages/tui/src/app.tsx b/packages/tui/src/app.tsx
+index 57f372ef7..ae5ff3f87 100644
+--- a/packages/tui/src/app.tsx
++++ b/packages/tui/src/app.tsx
+@@ -255,7 +255,7 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
+                 <ErrorBoundary fallback={(error, reset) => <ErrorComponent error={error} reset={reset} mode={mode} />}>
+                   <TuiPathsProvider
+                     value={{
+-                      cwd: process.cwd(),
++                      cwd: input.directory ?? process.env.PWD ?? process.cwd(),
+                       home: global.home,
+                       state: global.state,
+                       worktree: global.data + "/worktree",
+diff --git a/packages/tui/src/context/data.tsx b/packages/tui/src/context/data.tsx
+index 9b2e58907..f64d686ad 100644
+--- a/packages/tui/src/context/data.tsx
++++ b/packages/tui/src/context/data.tsx
+@@ -74,7 +74,7 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
+     const sdk = useSDK()
+     const events = useEvent()
+     const [defaultLocation, setDefaultLocation] = createSignal<LocationRef>({
+-      directory: sdk.directory ?? process.cwd(),
++      directory: sdk.directory ?? process.env.PWD ?? process.cwd(),
+     })
  
- function shouldStayOnControlPlane(request: HttpServerRequest.HttpServerRequest, url: URL): boolean {
+     const message = {
