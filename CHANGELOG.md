@@ -8,6 +8,7 @@ and this project adheres to [Calendar Versioning](https://calver.org/) (`vYY.MM.
 ## [v26.08.30.15614] - 2026-08-30
 
 ### Added
+- Enforced mandatory password protection on HTTP server (`serve.ts`), auto-generating a secure random password when `OPENCODE_SERVER_PASSWORD` is unconfigured.
 - Built-in `opencode update` CLI command to pull latest git commits, rebuild binary, and restart the background daemon.
 - Built-in `delegate` tool (`@opencode-ai/core/tool/delegate`) enabling OpenCode agents to send messages, delegate tasks across sessions, and orchestrate subagent execution.
 - Headless YOLO mode via `OPENCODE_AUTO_ACCEPT=1` / `OPENCODE_YOLO=1` flag in `PermissionV2` for unattended background runs.

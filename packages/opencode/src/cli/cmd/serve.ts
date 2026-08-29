@@ -13,7 +13,10 @@ export const ServeCommand = effectCmd({
   handler: Effect.fn("Cli.serve")(function* (args) {
     const { Server } = yield* Effect.promise(() => import("../../server/server"))
     if (!Flag.OPENCODE_SERVER_PASSWORD) {
-      console.log("Warning: OPENCODE_SERVER_PASSWORD is not set; server is unsecured.")
+      const generatedPassword = crypto.randomUUID().replace(/-/g, "").slice(0, 16)
+      process.env.OPENCODE_SERVER_PASSWORD = generatedPassword
+      console.log(`🔒 OPENCODE_SERVER_PASSWORD was not set. Generated secure password: ${generatedPassword}`)
+      console.log(`   Export OPENCODE_SERVER_PASSWORD in your shell/environment to use a permanent password.\n`)
     }
     const opts = yield* resolveNetworkOptions(args)
     const server = yield* Effect.promise(() => Server.listen(opts))
