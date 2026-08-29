@@ -8,6 +8,9 @@ and this project adheres to [Calendar Versioning](https://calver.org/) (`vYY.MM.
 ## [v26.08.30.15614] - 2026-08-30
 
 ### Added
+- Built-in `git_diff` tool (`@opencode-ai/core/tool/git-diff`) to inspect working-tree changes, unified diffs, and diffstats.
+- Ping-Pong Loop Guard in `delegate` tool preventing runaway agent loops (>10 autonomous delegations without human input).
+- User Presence Suppression in `ntfy` module (skips push alerts when user is actively typing/working at their machine).
 - Terminal QR code pairing and Tailscale auto-detection (`qr.ts`), encoding credentials into camera-scannable QR for instant PWA onboarding.
 - Enforced mandatory password protection on HTTP server (`serve.ts`), auto-generating a secure random password when `OPENCODE_SERVER_PASSWORD` is unconfigured.
 - Built-in `opencode update` CLI command to pull latest git commits, rebuild binary, and restart the background daemon.

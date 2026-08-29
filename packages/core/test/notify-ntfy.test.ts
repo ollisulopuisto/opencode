@@ -33,7 +33,9 @@ describe("Ntfy", () => {
     }) as any
 
     try {
-      await Effect.runPromise(Ntfy.send({ title: "Test Title", message: "Task completed", tags: ["robot"] }))
+      await Effect.runPromise(
+        Ntfy.send({ title: "Test Title", message: "Task completed", tags: ["robot"] }, { suppressIfPresent: false }),
+      )
       expect(requestedUrl).toBe("https://ntfy.sh/test-topic-123")
       expect(requestedBody).toBe("Task completed")
     } finally {

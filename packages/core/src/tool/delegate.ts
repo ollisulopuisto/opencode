@@ -40,6 +40,12 @@ export type Output = typeof Output.Type
 export const toModelOutput = (output: Output) =>
   `Message admitted to session ${output.sessionID} with message ID ${output.messageID} (status: ${output.status}). Target session execution scheduled.`
 
+const delegationCounters = new Map<string, number>()
+export const resetDelegationCounter = (pairKey?: string) => {
+  if (pairKey) delegationCounters.delete(pairKey)
+  else delegationCounters.clear()
+}
+
 const layer = Layer.effectDiscard(
   Effect.gen(function* () {
     const tools = yield* Tools.Service
@@ -60,6 +66,16 @@ const layer = Layer.effectDiscard(
           toModelOutput: ({ output }) => [{ type: "text", text: toModelOutput(output) }],
           execute: (input, context) =>
             Effect.gen(function* () {
+              const pairKey = `${context.sessionID}->${input.sessionID}`
+              const count = (delegationCounters.get(pairKey) ?? 0) + 1
+              if (count > 10) {
+                return yield* Effect.fail(
+                  new ToolFailure({
+                    message: `Autonomous loop guard triggered: 10 consecutive delegations between session ${context.sessionID} and ${input.sessionID} without human intervention. Halting to prevent runaway token spend.`,
+                  }),
+                )
+              }
+              delegationCounters.set(pairKey, count)
               yield* permission.assert({
                 action: name,
                 resources: [input.sessionID],
