@@ -78,11 +78,12 @@ export const AttachCommand = cmd({
     }
     const noReplay = args.replay === false || args.noReplay === true
 
+    const callerDir = process.env["OPENCODE_CALLER_DIR"] || process.env["INIT_CWD"] || process.env["OLDPWD"]
     const directory = (() => {
-      const root = process.env.PWD ?? process.cwd()
+      const root = callerDir || process.env.PWD || process.cwd()
       if (args.dir) {
         try {
-          const resolved = path.isAbsolute(args.dir) ? args.dir : path.join(root, args.dir)
+          const resolved = path.isAbsolute(args.dir) ? args.dir : path.resolve(root, args.dir)
           process.chdir(resolved)
           return process.cwd()
         } catch {
@@ -96,7 +97,7 @@ export const AttachCommand = cmd({
       return root
     })()
 
-    console.error(`[attach-debug] targetUrl: ${targetUrl} | PWD: ${process.env.PWD} | cwd: ${process.cwd()} | directory: ${directory}`)
+    console.error(`[attach-debug] targetUrl: ${targetUrl} | callerDir: ${callerDir} | PWD: ${process.env.PWD} | cwd: ${process.cwd()} | directory: ${directory}`)
 
     if (args.mini) {
       const { runMini } = await import("./run")

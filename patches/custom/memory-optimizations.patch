@@ -1,40 +1,45 @@
 diff --git a/packages/opencode/src/cli/cmd/attach.ts b/packages/opencode/src/cli/cmd/attach.ts
-index bfd04de1f..c245b01eb 100644
+index c245b01eb..f70be1333 100644
 --- a/packages/opencode/src/cli/cmd/attach.ts
 +++ b/packages/opencode/src/cli/cmd/attach.ts
-@@ -96,6 +96,8 @@ export const AttachCommand = cmd({
+@@ -78,11 +78,12 @@ export const AttachCommand = cmd({
+     }
+     const noReplay = args.replay === false || args.noReplay === true
+ 
++    const callerDir = process.env["OPENCODE_CALLER_DIR"] || process.env["INIT_CWD"] || process.env["OLDPWD"]
+     const directory = (() => {
+-      const root = process.env.PWD ?? process.cwd()
++      const root = callerDir || process.env.PWD || process.cwd()
+       if (args.dir) {
+         try {
+-          const resolved = path.isAbsolute(args.dir) ? args.dir : path.join(root, args.dir)
++          const resolved = path.isAbsolute(args.dir) ? args.dir : path.resolve(root, args.dir)
+           process.chdir(resolved)
+           return process.cwd()
+         } catch {
+@@ -96,7 +97,7 @@ export const AttachCommand = cmd({
        return root
      })()
  
-+    console.error(`[attach-debug] targetUrl: ${targetUrl} | PWD: ${process.env.PWD} | cwd: ${process.cwd()} | directory: ${directory}`)
-+
+-    console.error(`[attach-debug] targetUrl: ${targetUrl} | PWD: ${process.env.PWD} | cwd: ${process.cwd()} | directory: ${directory}`)
++    console.error(`[attach-debug] targetUrl: ${targetUrl} | callerDir: ${callerDir} | PWD: ${process.env.PWD} | cwd: ${process.cwd()} | directory: ${directory}`)
+ 
      if (args.mini) {
        const { runMini } = await import("./run")
-       await runMini({
-diff --git a/packages/opencode/src/server/routes/instance/httpapi/middleware/workspace-routing.ts b/packages/opencode/src/server/routes/instance/httpapi/middleware/workspace-routing.ts
-index 3d64b36fb..2ad3c0520 100644
---- a/packages/opencode/src/server/routes/instance/httpapi/middleware/workspace-routing.ts
-+++ b/packages/opencode/src/server/routes/instance/httpapi/middleware/workspace-routing.ts
-@@ -100,7 +100,9 @@ function decodeDir(input?: string): string | undefined {
- 
- function defaultDirectory(request: HttpServerRequest.HttpServerRequest, url: URL): string {
-   const dir = url.searchParams.get("directory") || request.headers["x-opencode-directory"]
--  return decodeDir(dir) || process.cwd()
-+  const decoded = decodeDir(dir) || process.cwd()
-+  console.error(`[server-debug] ${request.method} ${url.pathname}${url.search} raw-dir: "${dir}" -> decoded: "${decoded}"`)
-+  return decoded
+diff --git a/packages/opencode/src/cli/cmd/tui.ts b/packages/opencode/src/cli/cmd/tui.ts
+index 1c3b5bee1..8910ab25b 100644
+--- a/packages/opencode/src/cli/cmd/tui.ts
++++ b/packages/opencode/src/cli/cmd/tui.ts
+@@ -63,7 +63,11 @@ async function input(value?: string) {
+   return piped + "\n" + value
  }
  
- function shouldStayOnControlPlane(request: HttpServerRequest.HttpServerRequest, url: URL): boolean {
-diff --git a/packages/tui/src/context/project.tsx b/packages/tui/src/context/project.tsx
-index d73a17e7e..089b6eeba 100644
---- a/packages/tui/src/context/project.tsx
-+++ b/packages/tui/src/context/project.tsx
-@@ -44,6 +44,7 @@ export const { use: useProject, provider: ProjectProvider } = createSimpleContex
-       const directories = project.data?.id
-         ? await sdk.client.project.directories({ projectID: project.data.id, workspace })
-         : undefined
-+      console.error(`[tui-debug] sync() sdk.url: ${sdk.url} | sdk.dir: ${sdk.directory} | project.worktree: ${project.data?.worktree} | instance.dir: ${instancePath.data?.directory}`)
-       batch(() => {
-         setStore("instance", "path", reconcile(instancePath.data || defaultPath))
-         setStore("project", "id", project.data?.id)
+-export function resolveThreadDirectory(project?: string, envPWD = process.env.PWD, cwd = process.cwd()) {
++export function resolveThreadDirectory(
++  project?: string,
++  envPWD = process.env["OPENCODE_CALLER_DIR"] || process.env["INIT_CWD"] || process.env["OLDPWD"] || process.env.PWD,
++  cwd = process.cwd(),
++) {
+   const root = Filesystem.resolve(envPWD ?? cwd)
+   if (project) return Filesystem.resolve(path.isAbsolute(project) ? project : path.join(root, project))
+   return root
