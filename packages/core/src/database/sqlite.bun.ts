@@ -161,7 +161,14 @@ const nativeLayer = (config: Config) =>
         create: config.create ?? true,
       })
       yield* Effect.addFinalizer(() => Effect.sync(() => native.close()))
-      if (config.disableWAL !== true) native.run("PRAGMA journal_mode = WAL;")
+      if (config.disableWAL !== true && config.readonly !== true) {
+        native.run("PRAGMA journal_mode = WAL;")
+        native.run("PRAGMA synchronous = NORMAL;")
+        native.run("PRAGMA wal_autocheckpoint = 1000;")
+        native.run("PRAGMA busy_timeout = 5000;")
+        native.run("PRAGMA temp_store = MEMORY;")
+        native.run("PRAGMA mmap_size = 268435456;")
+      }
       return native
     }),
   )

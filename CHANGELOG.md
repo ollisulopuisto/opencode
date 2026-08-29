@@ -9,6 +9,7 @@ and this project adheres to [Calendar Versioning](https://calver.org/) (`vYY.MM.
 
 ### Added
 - Unix domain socket server and client transport support (`--socket <path>`).
+- `--debug` / `-d` CLI option to gate verbose trace logging across client and server.
 - Apple Silicon Metal MLX local provider sidecar integration (`@opencode-ai/core/plugin/provider/mlx`).
 - Dynamic Tree-sitter WASM grammar lazy loader in TUI to reduce startup memory footprint.
 
@@ -20,5 +21,6 @@ and this project adheres to [Calendar Versioning](https://calver.org/) (`vYY.MM.
 - Fixed diff memory consumption by switching from full-file context to compact delta snapshots (`context: 4`).
 
 ### Changed
+- Configured high-performance SQLite WAL pragmas (`synchronous=NORMAL`, `wal_autocheckpoint=1000`, `mmap_size=256MB`, `temp_store=MEMORY`) to bound WAL growth and enable zero-copy memory-mapped reads.
 - Enabled JavaScriptCore bytecode compilation (`bytecode: true`) and minification in binary bundler.
 - Added `--smol` flag to binary runtime configuration for aggressive heap compaction.
