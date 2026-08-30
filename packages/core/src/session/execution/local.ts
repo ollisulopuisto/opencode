@@ -19,6 +19,7 @@ const layer = Layer.effect(
         if (!session) return yield* Effect.die(`Session not found: ${sessionID}`)
         return yield* SessionRunner.Service.use((runner) => runner.run({ sessionID, force })).pipe(
           Effect.provide(locations.get(session.location)),
+          Effect.provideService(SessionExecution.Service, execution),
           Effect.tapCause((cause) =>
             Cause.hasInterruptsOnly(cause)
               ? Effect.void
@@ -28,12 +29,14 @@ const layer = Layer.effect(
       }),
     })
 
-    return SessionExecution.Service.of({
+    const execution = SessionExecution.Service.of({
       active: coordinator.active,
       interrupt: coordinator.interrupt,
       resume: coordinator.run,
       wake: coordinator.wake,
     })
+
+    return execution
   }),
 )
 

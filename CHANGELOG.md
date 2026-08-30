@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Calendar Versioning](https://calver.org/) (`vYY.MM.DD.N`).
 
+## [v26.08.30.15633] - 2026-08-30
+
+### Fixed
+- Resolved circular layer dependency defect between `LocationServiceMap` and `SessionExecution` by decoupling `DelegateTool` layer construction from `SessionExecution.node` and injecting runtime execution dynamically during tool execution and runner drains.
+- Cleaned up `buildLocationServiceMap()` in server routes and core exports.
+
 ## [v26.08.30.15614] - 2026-08-30
 
 ### Added

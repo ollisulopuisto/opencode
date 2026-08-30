@@ -51,7 +51,6 @@ const layer = Layer.effectDiscard(
     const tools = yield* Tools.Service
     const { db } = yield* Database.Service
     const events = yield* EventV2.Service
-    const execution = yield* SessionExecution.Service
     const permission = yield* PermissionV2.Service
 
     yield* tools
@@ -100,7 +99,10 @@ const layer = Layer.effectDiscard(
                 delivery,
               })
 
-              yield* execution.wake(targetSessionID)
+              const execution = yield* Effect.serviceOption(SessionExecution.Service)
+              if (execution._tag === "Some") {
+                yield* execution.value.wake(targetSessionID)
+              }
 
               return {
                 sessionID: input.sessionID,
@@ -117,5 +119,5 @@ const layer = Layer.effectDiscard(
 export const node = makeLocationNode({
   name: "tool/delegate",
   layer,
-  deps: [ToolRegistry.node, Database.node, EventV2.node, SessionExecution.node, PermissionV2.node],
+  deps: [ToolRegistry.node, Database.node, EventV2.node, PermissionV2.node],
 })

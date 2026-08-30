@@ -95,7 +95,7 @@ export function buildLocationServiceMap(
         // those back out.
         const location = LayerNode.hoist(locationServices, Node.tags.values.global, allReplacements)
 
-        return LayerNode.compile(location.node, allReplacements).pipe(
+        return LayerNode.compile(location.node).pipe(
           Layer.fresh,
           Layer.tap(() =>
             Effect.logInfo("booting location services", {
@@ -103,7 +103,7 @@ export function buildLocationServiceMap(
               workspaceID: ref.workspaceID,
             }),
           ),
-          Layer.provide(LayerNode.compile(location.hoisted, allReplacements)),
+          Layer.provide(LayerNode.compile(location.hoisted)),
         )
       },
       { idleTimeToLive: "60 minutes" },
@@ -111,10 +111,5 @@ export function buildLocationServiceMap(
   )
 }
 
-import { SessionExecution } from "./session/execution"
-import { SessionExecutionLocal } from "./session/execution/local"
-
 // This is temporary for backwards compatibility
-export const locationServiceMapLayer = buildLocationServiceMap([
-  [SessionExecution.node, SessionExecutionLocal.node],
-])
+export const locationServiceMapLayer = buildLocationServiceMap()

@@ -48,10 +48,9 @@ const it = testEffect(
     LayerNode.group([Database.node, EventV2.node, ToolRegistry.node, DelegateTool.node]),
     [
       [Location.node, current],
-      [SessionExecution.node, execution],
       [PermissionV2.node, permission],
     ],
-  ),
+  ).pipe(Layer.provideMerge(execution)),
 )
 
 import { toolDefinitions, settleTool, toolIdentity } from "./lib/tool"
