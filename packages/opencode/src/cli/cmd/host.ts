@@ -5,6 +5,7 @@ import { withNetworkOptions, resolveNetworkOptionsNoConfig, hasArg } from "@/cli
 import { validateSession } from "../tui/validate-session"
 import { ServerAuth } from "@/server/auth"
 import { printPairingInfo, enableTailscaleServe, detectTailscaleServe } from "@/cli/qr"
+import { resolveHostConfig } from "@/cli/host-config"
 import { HostState } from "@/cli/host-state"
 import { Prompt } from "@/cli/prompt"
 import { resolveThreadDirectory } from "./tui"
@@ -110,28 +111,44 @@ export const HostCommand = cmd({
     // instead of drifting to a random one that invalidates saved PWA links.
     const bindPort = explicitPort ? network.port : network.port || DEFAULT_PORT
     const probePort = explicitPort ? network.port : record?.port ?? bindPort
-    // The whole point of `host` is remote clients (phone PWA), so default the
-    // bind address to all interfaces instead of loopback. Password auth is
-    // always enabled (generated when not supplied).
-    const bindHostname =
-      hasArg("--hostname") || socket || network.hostname !== "127.0.0.1" ? network.hostname : "0.0.0.0"
 
     const existing = await findExistingServer({ socket, port: probePort })
     const owned = !existing
 
     let port = existing?.port
     let password = suppliedPassword
+    let serveUrl: string | undefined
+    let bindHostname =
+      hasArg("--hostname") || socket || network.hostname !== "127.0.0.1" ? network.hostname : "0.0.0.0"
+    let localOnly = false
 
     if (!existing) {
-      if (!password) {
-        password = crypto.randomUUID().replace(/-/g, "").slice(0, 16)
-        process.env.OPENCODE_SERVER_PASSWORD = password
+      // Enable Tailscale Serve before deciding the security posture: the
+      // serve tunnel is what makes a loopback-bound server reachable from the
+      // phone over HTTPS, and tailnet-only exposure removes the need for a
+      // password entirely.
+      serveUrl = socket ? undefined : enableTailscaleServe(bindPort)
+      const security = resolveHostConfig({
+        tailscale: !!serveUrl,
+        socket: !!socket,
+        hostnameExplicit: hasArg("--hostname"),
+        hostname: network.hostname,
+        password: suppliedPassword,
+      })
+      bindHostname = security.hostname
+      localOnly = security.hostname === "127.0.0.1"
+      if (security.generated) {
+        process.env.OPENCODE_SERVER_PASSWORD = security.password
         UI.println(
           UI.Style.TEXT_DIM +
-            `🔒 OPENCODE_SERVER_PASSWORD was not set. Generated password: ${password}` +
+            `🔒 OPENCODE_SERVER_PASSWORD was not set. Generated password: ${security.password}` +
             UI.Style.TEXT_NORMAL,
         )
       }
+      if (security.warning) {
+        UI.println(UI.Style.TEXT_WARNING + security.warning + UI.Style.TEXT_NORMAL)
+      }
+      password = security.auth ? security.password : undefined
       const { Server } = await import("../../server/server")
       const server = await Server.listen({
         hostname: bindHostname,
@@ -170,14 +187,11 @@ export const HostCommand = cmd({
 
     // Publish real HTTPS through Tailscale Serve (tailnet-only) when starting
     // the server; when attaching, surface it only if it is already up.
-    const httpsUrl = socket
-      ? undefined
-      : owned
-        ? enableTailscaleServe(bindPort)
-        : await detectTailscaleServe(bindPort)
+    const httpsUrl = socket ? undefined : owned ? serveUrl : await detectTailscaleServe(bindPort)
+    if (!owned && httpsUrl) localOnly = true
 
     if (!args.noQr) {
-      await printPairingInfo({ port, socket, password, httpsUrl })
+      await printPairingInfo({ port, socket, password, httpsUrl, localOnly })
     }
 
     try {
@@ -260,7 +274,7 @@ export const HostCommand = cmd({
         ? `exits ${args.idleExit}s after the last client disconnects`
         : "stays running until you stop it with Ctrl-C"
     if (!args.noQr) {
-      await printPairingInfo({ port, socket, password, httpsUrl })
+      await printPairingInfo({ port, socket, password, httpsUrl, localOnly })
     }
     UI.println(
       UI.Style.TEXT_DIM + `TUI detached — server still up (${ClientTracker.count()} client(s) connected), ${idleNote}.`,

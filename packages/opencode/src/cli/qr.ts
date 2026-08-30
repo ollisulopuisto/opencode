@@ -115,6 +115,10 @@ export async function printPairingInfo(options: {
   password?: string
   socket?: string
   httpsUrl?: string
+  // The server is loopback-bound (tailnet-only exposure): direct LAN and
+  // Tailscale IP endpoints would not work, so only advertise localhost and
+  // the HTTPS Serve URL.
+  localOnly?: boolean
 }) {
   if (options.socket) {
     UI.println(UI.Style.TEXT_INFO_BOLD + "  Socket:            ", UI.Style.TEXT_NORMAL, `unix:${options.socket}`)
@@ -135,47 +139,57 @@ export async function printPairingInfo(options: {
   }
   UI.println(UI.Style.TEXT_INFO_BOLD + "  Local access:      ", UI.Style.TEXT_NORMAL, endpoints.localhost)
 
-  // Preferred Tailscale Endpoints
-  if (endpoints.magicDns) {
+  if (options.localOnly) {
+    UI.empty()
     UI.println(
-      UI.Style.TEXT_SUCCESS_BOLD + "  Tailscale access:  ",
-      UI.Style.TEXT_NORMAL,
-      endpoints.magicDns,
-      UI.Style.TEXT_SUCCESS + " (Recommended & Encrypted)",
+      UI.Style.TEXT_SUCCESS +
+        "  🔒 Reachable only through your tailnet — no password required; WireGuard encrypts all traffic.",
     )
-  }
-  if (endpoints.tailscale) {
-    UI.println(
-      endpoints.magicDns ? UI.Style.TEXT_DIM + "  Tailscale IP:      " : UI.Style.TEXT_SUCCESS_BOLD + "  Tailscale access:  ",
-      UI.Style.TEXT_NORMAL,
-      endpoints.tailscale,
-      endpoints.magicDns ? UI.Style.TEXT_DIM + " (Encrypted Mesh)" : UI.Style.TEXT_SUCCESS + " (Recommended & Encrypted)",
-    )
-  }
-
-  // Fallback LAN Endpoints
-  if (endpoints.lan && endpoints.lan.length > 0) {
-    for (const lanUrl of endpoints.lan) {
-      UI.println(UI.Style.TEXT_DIM + "  LAN access:        ", UI.Style.TEXT_NORMAL, lanUrl)
+  } else {
+    // Preferred Tailscale Endpoints
+    if (endpoints.magicDns) {
+      UI.println(
+        UI.Style.TEXT_SUCCESS_BOLD + "  Tailscale access:  ",
+        UI.Style.TEXT_NORMAL,
+        endpoints.magicDns,
+        UI.Style.TEXT_SUCCESS + " (Recommended & Encrypted)",
+      )
     }
-  }
+    if (endpoints.tailscale) {
+      UI.println(
+        endpoints.magicDns
+          ? UI.Style.TEXT_DIM + "  Tailscale IP:      "
+          : UI.Style.TEXT_SUCCESS_BOLD + "  Tailscale access:  ",
+        UI.Style.TEXT_NORMAL,
+        endpoints.tailscale,
+        endpoints.magicDns ? UI.Style.TEXT_DIM + " (Encrypted Mesh)" : UI.Style.TEXT_SUCCESS + " (Recommended & Encrypted)",
+      )
+    }
 
-  // Security warning for unencrypted LAN
-  if (!endpoints.tailscale && !endpoints.magicDns && endpoints.lan && endpoints.lan.length > 0) {
-    UI.empty()
-    UI.println(
-      UI.Style.TEXT_WARNING_BOLD + "  ⚠️  Security Notice: ",
-      UI.Style.TEXT_NORMAL,
-      "Listening over unencrypted HTTP on local Wi-Fi/LAN.",
-    )
-    UI.println(
-      UI.Style.TEXT_DIM + "     Use Tailscale (`tailscale up`) for automatic end-to-end WireGuard encryption.",
-    )
-  } else if (endpoints.tailscale || endpoints.magicDns) {
-    UI.empty()
-    UI.println(
-      UI.Style.TEXT_SUCCESS + "  🔒 End-to-end WireGuard encryption active via Tailscale mesh network.",
-    )
+    // Fallback LAN Endpoints
+    if (endpoints.lan && endpoints.lan.length > 0) {
+      for (const lanUrl of endpoints.lan) {
+        UI.println(UI.Style.TEXT_DIM + "  LAN access:        ", UI.Style.TEXT_NORMAL, lanUrl)
+      }
+    }
+
+    // Security warning for unencrypted LAN
+    if (!endpoints.tailscale && !endpoints.magicDns && endpoints.lan && endpoints.lan.length > 0) {
+      UI.empty()
+      UI.println(
+        UI.Style.TEXT_WARNING_BOLD + "  ⚠️  Security Notice: ",
+        UI.Style.TEXT_NORMAL,
+        "Listening over unencrypted HTTP on local Wi-Fi/LAN.",
+      )
+      UI.println(
+        UI.Style.TEXT_DIM + "     Use Tailscale (`tailscale up`) for automatic end-to-end WireGuard encryption.",
+      )
+    } else if (endpoints.tailscale || endpoints.magicDns) {
+      UI.empty()
+      UI.println(
+        UI.Style.TEXT_SUCCESS + "  🔒 End-to-end WireGuard encryption active via Tailscale mesh network.",
+      )
+    }
   }
 
   // Target Pairing URL for QR code: prefer the HTTPS Serve endpoint, then
