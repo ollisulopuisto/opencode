@@ -23,45 +23,45 @@ export function HarnessPanel(props: HarnessPanelProps) {
           <b>VERIFICATION GATES</b>
         </text>
         <box flexDirection="row" gap={2}>
-          <text fg={gates().tier0.status === "passed" ? theme.success : gates().tier0.status === "failed" ? theme.error : theme.textMuted}>
-            [{gates().tier0.status === "passed" ? "✓" : gates().tier0.status === "failed" ? "✗" : "○"}] Tier 0
+          <text fg={gates()?.tier0?.status === "passed" ? theme.success : gates()?.tier0?.status === "failed" ? theme.error : theme.textMuted}>
+            [{gates()?.tier0?.status === "passed" ? "✓" : gates()?.tier0?.status === "failed" ? "✗" : "○"}] Tier 0
           </text>
-          <text fg={gates().tier1.status === "passed" ? theme.success : gates().tier1.status === "failed" ? theme.error : theme.textMuted}>
-            [{gates().tier1.status === "passed" ? "✓" : gates().tier1.status === "failed" ? "✗" : "○"}] Tier 1
+          <text fg={gates()?.tier1?.status === "passed" ? theme.success : gates()?.tier1?.status === "failed" ? theme.error : theme.textMuted}>
+            [{gates()?.tier1?.status === "passed" ? "✓" : gates()?.tier1?.status === "failed" ? "✗" : "○"}] Tier 1
           </text>
-          <text fg={gates().tier2.status === "passed" ? theme.success : gates().tier2.status === "failed" ? theme.error : theme.textMuted}>
-            [{gates().tier2.status === "passed" ? "✓" : gates().tier2.status === "failed" ? "✗" : "○"}] Tier 2
+          <text fg={gates()?.tier2?.status === "passed" ? theme.success : gates()?.tier2?.status === "failed" ? theme.error : theme.textMuted}>
+            [{gates()?.tier2?.status === "passed" ? "✓" : gates()?.tier2?.status === "failed" ? "✗" : "○"}] Tier 2
           </text>
         </box>
       </box>
 
       {/* 2. Active Hypothesis / Supervisory Directive Banner */}
-      <Show when={supervisor().activeHypothesis || supervisor().hasActiveDirective}>
+      <Show when={supervisor()?.activeHypothesis || supervisor()?.hasActiveDirective}>
         <box flexDirection="column" gap={0}>
-          <Show when={supervisor().activeHypothesis}>
+          <Show when={supervisor()?.activeHypothesis}>
             <text fg={theme.info}>
-              <b>Hypothesis:</b> {supervisor().activeHypothesis}
+              <b>Hypothesis:</b> {supervisor()?.activeHypothesis}
             </text>
           </Show>
-          <Show when={supervisor().hasActiveDirective}>
+          <Show when={supervisor()?.hasActiveDirective}>
             <text fg={theme.warning}>
-              <b>Directive:</b> {supervisor().activeDirective}
+              <b>Directive:</b> {supervisor()?.activeDirective}
             </text>
           </Show>
         </box>
       </Show>
 
       {/* 3. Work-Unit Progress DAG */}
-      <Show when={plan().totalUnits > 0}>
+      <Show when={(plan()?.totalUnits ?? 0) > 0}>
         <box flexDirection="column" gap={0}>
           <text fg={theme.textMuted}>
-            <b>PLAN PROGRESS ({plan().completedUnits}/{plan().totalUnits})</b>
+            <b>PLAN PROGRESS ({plan()?.completedUnits ?? 0}/{plan()?.totalUnits ?? 0})</b>
           </text>
-          <For each={plan().units}>
+          <For each={plan()?.units ?? []}>
             {(unit) => (
               <box flexDirection="row" gap={1}>
-                <text fg={unit.status === "verified" ? theme.success : unit.status === "in_progress" ? theme.warning : theme.textMuted}>
-                  [{unit.status === "verified" ? "✓" : unit.status === "in_progress" ? "▶" : " "}] {unit.title}
+                <text fg={unit?.status === "verified" ? theme.success : unit?.status === "in_progress" ? theme.warning : theme.textMuted}>
+                  [{unit?.status === "verified" ? "✓" : unit?.status === "in_progress" ? "▶" : " "}] {unit?.title}
                 </text>
               </box>
             )}
@@ -71,11 +71,11 @@ export function HarnessPanel(props: HarnessPanelProps) {
 
       {/* 4. Change Budget Meter */}
       <box flexDirection="row" gap={2}>
-        <text fg={budget().isExceeded ? theme.error : theme.textMuted}>
-          Files: {budget().filesChangedCount}/{budget().maxFiles}
+        <text fg={budget()?.isExceeded ? theme.error : theme.textMuted}>
+          Files: {budget()?.filesChangedCount ?? 0}/{budget()?.maxFiles ?? 5}
         </text>
-        <text fg={budget().isExceeded ? theme.error : theme.textMuted}>
-          Lines: +{budget().linesAdded}/-{budget().linesDeleted}
+        <text fg={budget()?.isExceeded ? theme.error : theme.textMuted}>
+          Lines: +{budget()?.linesAdded ?? 0}/-{budget()?.linesDeleted ?? 0}
         </text>
       </box>
     </box>

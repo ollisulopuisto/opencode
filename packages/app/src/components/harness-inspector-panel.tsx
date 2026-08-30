@@ -32,44 +32,44 @@ export function HarnessInspectorPanel(props: HarnessInspectorPanelProps) {
         <div class="text-xs font-semibold text-text-muted uppercase tracking-wider">Multi-Tier Verification Gates</div>
         <div class="grid grid-cols-3 gap-2">
           {/* Tier 0 */}
-          <div class={`p-2.5 rounded-lg border flex flex-col gap-1 ${gates().tier0.status === "passed" ? "bg-success/10 border-success/30 text-success" : gates().tier0.status === "failed" ? "bg-error/10 border-error/30 text-error" : "bg-surface border-border-base text-text-muted"}`}>
+          <div class={`p-2.5 rounded-lg border flex flex-col gap-1 ${gates()?.tier0?.status === "passed" ? "bg-success/10 border-success/30 text-success" : gates()?.tier0?.status === "failed" ? "bg-error/10 border-error/30 text-error" : "bg-surface border-border-base text-text-muted"}`}>
             <div class="flex items-center justify-between font-medium">
               <span>Tier 0: Types & Lint</span>
-              <span>{gates().tier0.status === "passed" ? "✓" : gates().tier0.status === "failed" ? "✗" : "○"}</span>
+              <span>{gates()?.tier0?.status === "passed" ? "✓" : gates()?.tier0?.status === "failed" ? "✗" : "○"}</span>
             </div>
-            <Show when={gates().tier0.durationMs}>
-              <span class="text-xs opacity-75 font-mono">{gates().tier0.durationMs}ms</span>
+            <Show when={gates()?.tier0?.durationMs}>
+              <span class="text-xs opacity-75 font-mono">{gates()?.tier0?.durationMs}ms</span>
             </Show>
           </div>
 
           {/* Tier 1 */}
-          <div class={`p-2.5 rounded-lg border flex flex-col gap-1 ${gates().tier1.status === "passed" ? "bg-success/10 border-success/30 text-success" : gates().tier1.status === "failed" ? "bg-error/10 border-error/30 text-error" : "bg-surface border-border-base text-text-muted"}`}>
+          <div class={`p-2.5 rounded-lg border flex flex-col gap-1 ${gates()?.tier1?.status === "passed" ? "bg-success/10 border-success/30 text-success" : gates()?.tier1?.status === "failed" ? "bg-error/10 border-error/30 text-error" : "bg-surface border-border-base text-text-muted"}`}>
             <div class="flex items-center justify-between font-medium">
               <span>Tier 1: Targeted Tests</span>
-              <span>{gates().tier1.status === "passed" ? "✓" : gates().tier1.status === "failed" ? "✗" : "○"}</span>
+              <span>{gates()?.tier1?.status === "passed" ? "✓" : gates()?.tier1?.status === "failed" ? "✗" : "○"}</span>
             </div>
-            <Show when={gates().tier1.durationMs}>
-              <span class="text-xs opacity-75 font-mono">{gates().tier1.durationMs}ms</span>
+            <Show when={gates()?.tier1?.durationMs}>
+              <span class="text-xs opacity-75 font-mono">{gates()?.tier1?.durationMs}ms</span>
             </Show>
           </div>
 
           {/* Tier 2 */}
-          <div class={`p-2.5 rounded-lg border flex flex-col gap-1 ${gates().tier2.status === "passed" ? "bg-success/10 border-success/30 text-success" : gates().tier2.status === "failed" ? "bg-error/10 border-error/30 text-error" : "bg-surface border-border-base text-text-muted"}`}>
+          <div class={`p-2.5 rounded-lg border flex flex-col gap-1 ${gates()?.tier2?.status === "passed" ? "bg-success/10 border-success/30 text-success" : gates()?.tier2?.status === "failed" ? "bg-error/10 border-error/30 text-error" : "bg-surface border-border-base text-text-muted"}`}>
             <div class="flex items-center justify-between font-medium">
               <span>Tier 2: Regression</span>
-              <span>{gates().tier2.status === "passed" ? "✓" : gates().tier2.status === "failed" ? "✗" : "○"}</span>
+              <span>{gates()?.tier2?.status === "passed" ? "✓" : gates()?.tier2?.status === "failed" ? "✗" : "○"}</span>
             </div>
-            <Show when={gates().tier2.durationMs}>
-              <span class="text-xs opacity-75 font-mono">{gates().tier2.durationMs}ms</span>
+            <Show when={gates()?.tier2?.durationMs}>
+              <span class="text-xs opacity-75 font-mono">{gates()?.tier2?.durationMs}ms</span>
             </Show>
           </div>
         </div>
 
         {/* Failed diagnostics popover / callout */}
-        <Show when={gates().tier2.status === "failed" && gates().tier2.diagnostics}>
+        <Show when={gates()?.tier2?.status === "failed" && gates()?.tier2?.diagnostics}>
           <div class="p-3 bg-error/10 border border-error/30 rounded-lg text-xs font-mono text-error overflow-x-auto">
             <div class="font-semibold mb-1">Tier 2 Diagnostic Failure:</div>
-            <pre class="whitespace-pre-wrap">{gates().tier2.diagnostics}</pre>
+            <pre class="whitespace-pre-wrap">{gates()?.tier2?.diagnostics}</pre>
           </div>
         </Show>
       </div>

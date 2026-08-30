@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Calendar Versioning](https://calver.org/) (`vYY.MM.DD.N`).
 
+## [v26.08.31.15663] - 2026-08-31
+
+### Fixed
+- **Harness Verification Gates Null Safety**: Made verification gate presenters and TUI/Web components defensively handle missing or undefined task states and properties, resolving TUI crash on evaluating `tier0`.
+
 ## [v26.08.31.15662] - 2026-08-31
 
 ### Fixed

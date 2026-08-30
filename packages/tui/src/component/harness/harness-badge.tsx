@@ -17,13 +17,36 @@ export function HarnessBadge(props: HarnessBadgeProps) {
 
   return (
     <Show when={gates()}>
-      {(g) => (
-        <box flexDirection="row" gap={1}>
-          <text fg={g().allPassed ? theme.success : g().tier2.status === "failed" || g().tier1.status === "failed" || g().tier0.status === "failed" ? theme.error : theme.textMuted}>
-            [Harness: {g().allPassed ? "✓ Verified" : g().tier0.status === "failed" ? "✗ T0" : g().tier1.status === "failed" ? "✗ T1" : g().tier2.status === "failed" ? "✗ T2" : "Running"}]
-          </text>
-        </box>
-      )}
+      {(g) => {
+        const item = () => (typeof g === "function" ? g() : g) ?? gates()
+        return (
+          <box flexDirection="row" gap={1}>
+            <text
+              fg={
+                item()?.allPassed
+                  ? theme.success
+                  : item()?.tier2?.status === "failed" ||
+                      item()?.tier1?.status === "failed" ||
+                      item()?.tier0?.status === "failed"
+                    ? theme.error
+                    : theme.textMuted
+              }
+            >
+              [Harness:{" "}
+              {item()?.allPassed
+                ? "✓ Verified"
+                : item()?.tier0?.status === "failed"
+                  ? "✗ T0"
+                  : item()?.tier1?.status === "failed"
+                    ? "✗ T1"
+                    : item()?.tier2?.status === "failed"
+                      ? "✗ T2"
+                      : "Running"}
+              ]
+            </text>
+          </box>
+        )
+      }}
     </Show>
   )
 }

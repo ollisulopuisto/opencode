@@ -56,18 +56,18 @@ export interface CalVerCommitDraftPresenter {
   readonly fullMessage: string
 }
 
-export function presentVerificationGates(taskState: TaskState): VerificationGatesPresenter {
-  const tests = taskState.testsRun
+export function presentVerificationGates(taskState?: TaskState | null): VerificationGatesPresenter {
+  const tests = taskState?.testsRun ?? []
 
   const parseTier = (pattern: RegExp, defaultName: string): VerificationTierPresenter => {
-    const matching = tests.filter((t) => pattern.test(t.name))
+    const matching = tests.filter((t) => pattern.test(t?.name ?? ""))
     if (matching.length === 0) {
       return {
         name: defaultName,
         status: "pending",
       }
     }
-    const failed = matching.find((t) => !t.passed)
+    const failed = matching.find((t) => !t?.passed)
     if (failed) {
       return {
         name: failed.name,
@@ -76,9 +76,9 @@ export function presentVerificationGates(taskState: TaskState): VerificationGate
         diagnostics: failed.output ?? "Verification assertion failed",
       }
     }
-    const totalDuration = matching.reduce((sum, t) => sum + (t.durationMs ?? 0), 0)
+    const totalDuration = matching.reduce((sum, t) => sum + (t?.durationMs ?? 0), 0)
     return {
-      name: matching[0].name,
+      name: matching[0]?.name ?? defaultName,
       status: "passed",
       durationMs: totalDuration,
     }
@@ -101,12 +101,12 @@ export function presentVerificationGates(taskState: TaskState): VerificationGate
   }
 }
 
-export function presentPlanProgress(taskState: TaskState): PlanProgressPresenter {
-  const units = taskState.workUnits
+export function presentPlanProgress(taskState?: TaskState | null): PlanProgressPresenter {
+  const units = taskState?.workUnits ?? []
   const totalUnits = units.length
-  const completedUnits = units.filter((u) => u.status === "verified").length
+  const completedUnits = units.filter((u) => u?.status === "verified").length
   const percentage = totalUnits > 0 ? Math.round((completedUnits / totalUnits) * 100) : 0
-  const activeUnit = units.find((u) => u.id === taskState.activeWorkUnitId)
+  const activeUnit = units.find((u) => u?.id === taskState?.activeWorkUnitId)
 
   return {
     totalUnits,
@@ -118,15 +118,15 @@ export function presentPlanProgress(taskState: TaskState): PlanProgressPresenter
 }
 
 export function presentBudget(
-  taskState: TaskState,
+  taskState?: TaskState | null,
   limits: { maxFiles?: number; maxLines?: number } = {},
 ): ChangeBudgetPresenter {
   const maxFiles = limits.maxFiles ?? 5
   const maxLines = limits.maxLines ?? 300
-  const filesChanged = taskState.filesChanged
+  const filesChanged = taskState?.filesChanged ?? []
   const filesChangedCount = filesChanged.length
-  const linesAdded = taskState.linesAdded
-  const linesDeleted = taskState.linesDeleted
+  const linesAdded = taskState?.linesAdded ?? 0
+  const linesDeleted = taskState?.linesDeleted ?? 0
   const totalLinesModified = linesAdded + linesDeleted
 
   const violations: string[] = []
@@ -154,27 +154,37 @@ export function presentBudget(
 }
 
 export function presentSupervisor(
-  taskState: TaskState,
+  taskState?: TaskState | null,
   bannedHypotheses: readonly string[] = [],
 ): SupervisorPresenter {
-  const activeDirectiveDecision = taskState.decisions.find(
-    (d) => d.toLowerCase().includes("directive") || d.toLowerCase().includes("supervisor"),
+  const decisions = taskState?.decisions ?? []
+  const activeDirectiveDecision = decisions.find(
+    (d) => typeof d === "string" && (d.toLowerCase().includes("directive") || d.toLowerCase().includes("supervisor")),
   )
 
   return {
-    activeHypothesis: taskState.currentHypothesis,
+    activeHypothesis: taskState?.currentHypothesis ?? "",
     bannedHypotheses,
     hasActiveDirective: activeDirectiveDecision !== undefined,
     activeDirective: activeDirectiveDecision,
-    interventionsCount: taskState.supervisorInterventions,
+    interventionsCount: taskState?.supervisorInterventions ?? 0,
   }
 }
 
 export function presentCommitDraft(
-  taskState: TaskState,
+  taskState?: TaskState | null,
   options: { commitCount?: number; date?: Date } = {},
 ): CalVerCommitDraftPresenter {
   const gates = presentVerificationGates(taskState)
+  if (!taskState) {
+    return {
+      readyToCommit: false,
+      calverVersion: "",
+      commitTitle: "",
+      commitBody: "",
+      fullMessage: "",
+    }
+  }
   const commit = GitLifecycleEngine.synthesizeCommit({
     taskState,
     commitCount: options.commitCount ?? 1,

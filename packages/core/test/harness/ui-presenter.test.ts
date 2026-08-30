@@ -109,4 +109,27 @@ describe("HarnessUiPresenter", () => {
     expect(draft.calverVersion).toBe("v26.08.30.15")
     expect(draft.commitTitle).toBe("feat(core): add timestamp helper")
   })
+
+  it("handles null, undefined, or empty state without crashing", () => {
+    const gates = HarnessUiPresenter.presentVerificationGates(undefined)
+    expect(gates.tier0.status).toBe("pending")
+    expect(gates.tier1.status).toBe("pending")
+    expect(gates.tier2.status).toBe("pending")
+    expect(gates.allPassed).toBe(false)
+
+    const plan = HarnessUiPresenter.presentPlanProgress(null)
+    expect(plan.totalUnits).toBe(0)
+    expect(plan.completedUnits).toBe(0)
+
+    const budget = HarnessUiPresenter.presentBudget(undefined)
+    expect(budget.filesChangedCount).toBe(0)
+    expect(budget.isExceeded).toBe(false)
+
+    const supervisor = HarnessUiPresenter.presentSupervisor(null)
+    expect(supervisor.activeHypothesis).toBe("")
+    expect(supervisor.hasActiveDirective).toBe(false)
+
+    const draft = HarnessUiPresenter.presentCommitDraft(undefined)
+    expect(draft.readyToCommit).toBe(false)
+  })
 })
