@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { formatDuration } from "../../src/util/format"
+import { formatDuration, formatTimestamp } from "../../src/util/format"
 
 describe("util.format", () => {
   describe("formatDuration", () => {
@@ -54,6 +54,18 @@ describe("util.format", () => {
       expect(formatDuration(86400)).toBe("~1 day")
       expect(formatDuration(604799)).toBe("~6 days")
       expect(formatDuration(604800)).toBe("~1 week")
+    })
+  })
+
+  describe("formatTimestamp", () => {
+    test("formats epoch millis as YYYY-MM-DD HH:mm in local time", () => {
+      expect(formatTimestamp(new Date(2025, 0, 15, 9, 5).getTime())).toBe("2025-01-15 09:05")
+      expect(formatTimestamp(new Date(2025, 11, 31, 23, 59).getTime())).toBe("2025-12-31 23:59")
+      expect(formatTimestamp(new Date(2026, 5, 1, 0, 0).getTime())).toBe("2026-06-01 00:00")
+    })
+
+    test("returns empty string for invalid input", () => {
+      expect(formatTimestamp(NaN)).toBe("")
     })
   })
 })

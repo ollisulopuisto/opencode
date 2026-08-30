@@ -18,3 +18,10 @@ export function formatDuration(secs: number) {
   const weeks = Math.floor(secs / 604800)
   return weeks === 1 ? "~1 week" : `~${weeks} weeks`
 }
+
+export function formatTimestamp(ms: number) {
+  if (Number.isNaN(ms)) return ""
+  const date = new Date(ms)
+  const pad = (n: number) => String(n).padStart(2, "0")
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
+}

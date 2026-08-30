@@ -161,7 +161,7 @@ export const HarnessCommand = {
         ``,
         `Multi-Lane Role Assignments:`,
         ...Object.values(analysis.assignedRoles).map(
-          (a) => `  • ${a.role.toUpperCase().padEnd(12)} ${a.selectedModel.id.padEnd(28)} (Score: ${a.roiScore} | Fallback: ${a.fallbackModel?.id ?? "none"})`
+          (a: any) => `  • ${a.role.toUpperCase().padEnd(12)} ${a.selectedModel.id.padEnd(28)} (Score: ${a.roiScore} | Fallback: ${a.fallbackModel?.id ?? "none"})`
         ),
       ]
       prompts.note(lines.join("\n"), "Model Cost-Benefit & ROI Analysis")
