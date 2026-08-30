@@ -1,0 +1,8 @@
+{
+  "name": "opencode-harness-v5",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "bun test"
+  }
+}
