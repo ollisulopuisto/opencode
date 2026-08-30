@@ -61,7 +61,16 @@ export const UpdateCommand = {
         prompts.outro("Build failed")
         return
       }
-      spinner.stop("Standalone binary compiled")
+      const fs = await import("fs")
+      const distBin = path.join(root, "packages/opencode/dist/opencode-darwin-arm64/bin/opencode")
+      const localBin = path.join(process.env.HOME || "/Users/dst", ".local/bin/opencode")
+      if (fs.existsSync(distBin)) {
+        try {
+          fs.copyFileSync(distBin, localBin)
+          fs.chmodSync(localBin, 0o755)
+        } catch {}
+      }
+      spinner.stop("Standalone binary compiled & installed to ~/.local/bin/opencode")
     }
 
     if (args.restart) {

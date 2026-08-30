@@ -128,18 +128,20 @@ export async function printPairingInfo(options: { port: number; password?: strin
   }
   const pairingUrl = urlObj.toString()
 
-  try {
-    const qr = await QRCode.toString(pairingUrl, { type: "terminal", small: true })
-    UI.empty()
-    UI.println(UI.Style.TEXT_INFO_BOLD + "  Scan with phone camera to pair PWA / Web UI:")
-    UI.empty()
-    // Indent QR code
-    const lines = qr.split("\n")
-    for (const line of lines) {
-      UI.println("  " + line)
+  if (process.stdout.isTTY) {
+    try {
+      const qr = await QRCode.toString(pairingUrl, { type: "terminal", small: true })
+      UI.empty()
+      UI.println(UI.Style.TEXT_INFO_BOLD + "  Scan with phone camera to pair PWA / Web UI:")
+      UI.empty()
+      // Indent QR code
+      const lines = qr.split("\n")
+      for (const line of lines) {
+        UI.println("  " + line)
+      }
+      UI.empty()
+    } catch (err) {
+      // If QR rendering fails, fallback gracefully
     }
-    UI.empty()
-  } catch (err) {
-    // If QR rendering fails, fallback gracefully
   }
 }

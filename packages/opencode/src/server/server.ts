@@ -85,6 +85,27 @@ export async function listen(opts: ListenOptions): Promise<Listener> {
 
 const listenEffect: (opts: ListenOptions) => Effect.Effect<EffectListener, unknown> = Effect.fn("Server.listen")(
   function* (opts: ListenOptions) {
+    if (opts.socket && opts.port) {
+      const socketState = yield* startSocketListener(opts, opts.socket)
+      const tcpState = yield* startWithPortFallback(opts)
+      const address = yield* tcpAddress(tcpState)
+      const listenerUrl = makeURL(opts.hostname, address.port)
+      const unpublishMdns = yield* setupMdns(opts, address.port, tcpState.scope)
+      url = listenerUrl
+
+      const socketStop = yield* makeStop(socketState, Effect.void, new URL("http://localhost"))
+      const tcpStop = yield* makeStop(tcpState, unpublishMdns, listenerUrl)
+
+      return {
+        hostname: opts.hostname,
+        port: address.port,
+        socket: opts.socket,
+        url: listenerUrl,
+        stop: (close?: boolean) =>
+          Effect.all([socketStop(close), tcpStop(close)]).pipe(Effect.asVoid),
+      }
+    }
+
     if (opts.socket) {
       const state = yield* startSocketListener(opts, opts.socket)
       const listenerUrl = new URL("http://localhost")

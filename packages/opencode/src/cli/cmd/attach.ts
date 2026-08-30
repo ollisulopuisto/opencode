@@ -65,11 +65,14 @@ export const AttachCommand = cmd({
         describe: "cap visible mini replay to the newest N messages",
       }),
   handler: async (args) => {
-    const targetUrl = args.socket ? args.socket : args.url
+    let targetUrl = args.socket ? args.socket : args.url
     if (!targetUrl) {
-      UI.error("Please provide a server URL or socket path to attach to (e.g. opencode attach http://localhost:4096 or opencode attach /tmp/opencode.sock)")
-      process.exitCode = 1
-      return
+      const fs = await import("fs")
+      if (fs.existsSync("/tmp/opencode.sock")) {
+        targetUrl = "/tmp/opencode.sock"
+      } else {
+        targetUrl = "http://127.0.0.1:8090"
+      }
     }
 
     if (args.replay === true) {
