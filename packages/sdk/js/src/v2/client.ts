@@ -65,7 +65,14 @@ export function createOpencodeClient(config?: Config & { directory?: string; exp
       if (typeof req === "string" || req instanceof URL) {
         return (baseFetch as any)(req, { ...init, unix: unixSocket })
       }
-      return (baseFetch as any)(req, { unix: unixSocket })
+      return (baseFetch as any)(req.url, {
+        method: req.method,
+        headers: req.headers,
+        body: req.method !== "GET" && req.method !== "HEAD" ? req.body : undefined,
+        signal: req.signal,
+        ...init,
+        unix: unixSocket,
+      })
     }
     // @ts-ignore
     if (req && typeof req === "object") req.timeout = false

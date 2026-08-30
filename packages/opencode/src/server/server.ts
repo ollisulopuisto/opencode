@@ -86,14 +86,26 @@ export async function listen(opts: ListenOptions): Promise<Listener> {
 const listenEffect: (opts: ListenOptions) => Effect.Effect<EffectListener, unknown> = Effect.fn("Server.listen")(
   function* (opts: ListenOptions) {
     if (opts.socket && opts.port) {
-      const socketState = yield* startSocketListener(opts, opts.socket)
       const tcpState = yield* startWithPortFallback(opts)
       const address = yield* tcpAddress(tcpState)
       const listenerUrl = makeURL(opts.hostname, address.port)
       const unpublishMdns = yield* setupMdns(opts, address.port, tcpState.scope)
       url = listenerUrl
 
-      const socketStop = yield* makeStop(socketState, Effect.void, new URL("http://localhost"))
+      const net = yield* Effect.promise(() => import("node:net"))
+      const fs = yield* Effect.promise(() => import("node:fs"))
+      try {
+        if (fs.existsSync(opts.socket)) fs.unlinkSync(opts.socket)
+      } catch {}
+
+      const socketBridge = net.createServer((client) => {
+        const target = net.connect(address.port, "127.0.0.1")
+        client.pipe(target).pipe(client)
+        client.on("error", () => target.destroy())
+        target.on("error", () => client.destroy())
+      })
+      socketBridge.listen(opts.socket)
+
       const tcpStop = yield* makeStop(tcpState, unpublishMdns, listenerUrl)
 
       return {
@@ -102,7 +114,13 @@ const listenEffect: (opts: ListenOptions) => Effect.Effect<EffectListener, unkno
         socket: opts.socket,
         url: listenerUrl,
         stop: (close?: boolean) =>
-          Effect.all([socketStop(close), tcpStop(close)]).pipe(Effect.asVoid),
+          Effect.gen(function* () {
+            try {
+              socketBridge.close()
+              if (fs.existsSync(opts.socket!)) fs.unlinkSync(opts.socket!)
+            } catch {}
+            yield* tcpStop(close)
+          }),
       }
     }
 
