@@ -9,7 +9,7 @@ import { ServerShutdown } from "@/server/shutdown"
 import { Effect, Queue } from "effect"
 import * as Stream from "effect/Stream"
 import { HttpServerResponse } from "effect/unstable/http"
-import { HttpApiBuilder } from "effect/unstable/httpapi"
+import { HttpApiBuilder, HttpApiError } from "effect/unstable/httpapi"
 import * as Sse from "effect/unstable/encoding/Sse"
 import { RootHttpApi } from "../api"
 import { GlobalUpgradeInput } from "../groups/global"
@@ -96,22 +96,22 @@ export const globalHandlers = HttpApiBuilder.group(RootHttpApi, "global", (handl
     const upgrade = Effect.fn("GlobalHttpApi.upgrade")(function* (ctx: { payload: typeof GlobalUpgradeInput.Type }) {
       const method = yield* installation.method()
       if (method === "unknown") {
-        return HttpServerResponse.jsonUnsafe(
-          { success: false as const, error: "Unknown installation method" },
-          { status: 400 },
-        )
+        return yield* new HttpApiError.BadRequest({})
       }
       const target = ctx.payload.target
       const result = yield* installation.upgrade(method, target).pipe(
-        Effect.as({ success: true as const, version: target }),
-        Effect.catch((err) =>
-          Effect.succeed({
+        Effect.match({
+          onFailure: (err) => ({
             success: false as const,
             error: err instanceof Error ? err.message : String(err),
           }),
-        ),
+          onSuccess: () => ({
+            success: true as const,
+            version: target,
+          }),
+        }),
       )
-      if (!result.success) return HttpServerResponse.jsonUnsafe(result, { status: 500 })
+      if (!result.success) return result
       GlobalBus.emit("event", {
         directory: "global",
         payload: {
@@ -119,7 +119,7 @@ export const globalHandlers = HttpApiBuilder.group(RootHttpApi, "global", (handl
           properties: { version: target },
         },
       })
-      return HttpServerResponse.jsonUnsafe(result)
+      return result
     })
 
     return handlers

@@ -59,7 +59,7 @@ describe("global HttpApi", () => {
   it.live("upgrades to the requested version", () =>
     Effect.gen(function* () {
       const response = yield* HttpClientRequest.post(GlobalPaths.upgrade).pipe(
-        HttpClientRequest.bodyJsonUnsafe({ target: "9.9.9" }),
+        HttpClientRequest.setBody(HttpBody.jsonUnsafe({ target: "9.9.9" })),
         HttpClient.execute,
       )
 
@@ -71,7 +71,7 @@ describe("global HttpApi", () => {
   it.live("rejects invalid upgrade payloads", () =>
     Effect.gen(function* () {
       const response = yield* HttpClientRequest.post(GlobalPaths.upgrade).pipe(
-        HttpClientRequest.bodyJsonUnsafe({ target: 1 }),
+        HttpClientRequest.setBody(HttpBody.jsonUnsafe({ target: 1 })),
         HttpClient.execute,
       )
 
@@ -82,7 +82,7 @@ describe("global HttpApi", () => {
   it.live("rejects invalid upgrade target versions", () =>
     Effect.gen(function* () {
       const response = yield* HttpClientRequest.post(GlobalPaths.upgrade).pipe(
-        HttpClientRequest.bodyJsonUnsafe({ target: "latest" }),
+        HttpClientRequest.setBody(HttpBody.jsonUnsafe({ target: "latest" })),
         HttpClient.execute,
       )
 

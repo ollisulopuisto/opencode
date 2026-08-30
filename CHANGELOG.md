@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Calendar Versioning](https://calver.org/) (`vYY.MM.DD.N`).
 
+## [v26.08.30.15634] - 2026-08-30
+
+### Fixed
+- Removed raw `console.error` in server HTTP defect middleware that leaked unformatted defect stacks to stderr and disrupted the interactive TUI display.
+- Fixed `GlobalHttpApi.upgrade` handler return format to return plain typed response payloads.
+- Updated session runner test assertions to match sorted tool definitions.
+
 ## [v26.08.30.15633] - 2026-08-30
 
 ### Fixed
