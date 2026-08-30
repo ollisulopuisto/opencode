@@ -38,6 +38,7 @@ import { SessionRunState } from "@/session/run-state"
 import { Session } from "@/session/session"
 import { SessionStatus } from "@/session/status"
 import { SessionSummary } from "@/session/summary"
+import { ServerShutdown } from "@/server/shutdown"
 import { Todo } from "@/session/todo"
 import { SessionShare } from "@/share/session"
 import { ShareNext } from "@/share/share-next"
@@ -209,6 +210,11 @@ type RouteRequirements =
   | HttpRouter.Request<"Requires", unknown>
   | HttpRouter.Request<"GlobalRequires", never>
 
+const exitAfterResponse = Effect.sync(() => {
+  // Give the shutdown response time to flush before the process exits.
+  setTimeout(() => process.exit(0), 250).unref()
+})
+
 const app = LayerNode.group([
   Npm.node,
   FSUtil.node,
@@ -266,12 +272,16 @@ const app = LayerNode.group([
   ProjectV2.node,
   ProjectCopy.node,
   PtyTicket.node,
+  SessionV2.node,
+  SessionExecution.node,
 ])
 
 export function createRoutes(
   corsOptions?: CorsOptions,
 ): Layer.Layer<never, EffectConfig.ConfigError, RouteRequirements> {
-  const locationServiceMapV2 = buildLocationServiceMap()
+  const locationServiceMapV2 = buildLocationServiceMap([
+    [SessionExecution.node, SessionExecutionLocal.node],
+  ])
 
   return Layer.mergeAll(
     rootApiRoutes,
@@ -288,26 +298,17 @@ export function createRoutes(
       corsVaryFix,
       fenceLayer,
       cors(corsOptions),
-      AppNodeBuilderV1.build(MoveSession.node, [[LocationServiceMap.node, locationServiceMapV2]]),
+      AppNodeBuilderV1.build(MoveSession.node),
       HttpServer.layerServices,
     ]),
     Layer.provide(Layer.succeed(CorsConfig)(corsOptions)),
     Layer.provide(sessionLocationLayer),
     Layer.provide(locationLayer),
     Layer.provide(PtyEnvironment.layer),
-    Layer.provide(
-      AppNodeBuilderV1.build(SessionV2.node, [
-        [LocationServiceMap.node, locationServiceMapV2],
-        [SessionExecution.node, SessionExecutionLocal.node],
-      ]),
-    ),
+    Layer.provide(ServerShutdown.layer(exitAfterResponse)),
+    Layer.provide(AppNodeBuilderV1.build(SessionV2.node)),
     Layer.provide(locationServiceMapV2),
-
     Layer.provide(AppNodeBuilderV1.build(app)),
-    // Must stay last: layers provided later in this pipe build beneath earlier ones,
-    // so Observability must come after every service graph. Otherwise eagerly forked
-    // fibers (e.g. the ModelsDev background refresh) capture Effect's default stdout
-    // logger and corrupt the TUI (#34730).
     Layer.provideMerge(Observability.layer),
   )
 }

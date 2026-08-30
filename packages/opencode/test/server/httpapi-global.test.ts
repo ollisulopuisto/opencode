@@ -8,6 +8,7 @@ import { Config } from "../../src/config/config"
 import { Installation } from "../../src/installation"
 import { MoveSession } from "@opencode-ai/core/control-plane/move-session"
 import { ServerAuth } from "../../src/server/auth"
+import { ServerShutdown } from "../../src/server/shutdown"
 import { RootHttpApi } from "../../src/server/routes/instance/httpapi/api"
 import { GlobalPaths } from "../../src/server/routes/instance/httpapi/groups/global"
 import { controlHandlers } from "../../src/server/routes/instance/httpapi/handlers/control"
@@ -17,6 +18,7 @@ import { authorizationLayer } from "../../src/server/routes/instance/httpapi/mid
 import { schemaErrorLayer } from "../../src/server/routes/instance/httpapi/middleware/schema-error"
 import { testEffect } from "../lib/effect"
 
+let shutdownRequests = 0
 const apiLayer = HttpRouter.serve(
   HttpApiBuilder.layer(RootHttpApi).pipe(
     Layer.provide([controlHandlers, controlPlaneHandlers, globalHandlers]),
@@ -37,6 +39,17 @@ const apiLayer = HttpRouter.serve(
       latest: () => Effect.succeed("9.9.9"),
       upgrade: () => Effect.void,
     }),
+  ),
+  Layer.provide(
+    Layer.succeed(
+      ServerShutdown.Service,
+      ServerShutdown.Service.of({
+        request: () => {
+          shutdownRequests++
+          return Effect.void
+        },
+      }),
+    ),
   ),
   Layer.provide(ServerAuth.Config.configLayer({ password: Option.none(), username: "opencode" })),
 )
@@ -85,6 +98,17 @@ describe("global HttpApi", () => {
       )
 
       expect(response.status).toBe(415)
+    }),
+  )
+
+  it.live("requests a server shutdown", () =>
+    Effect.gen(function* () {
+      const before = shutdownRequests
+      const response = yield* HttpClientRequest.post(GlobalPaths.shutdown).pipe(HttpClient.execute)
+
+      expect(response.status).toBe(200)
+      expect(yield* response.json).toBe(true)
+      expect(shutdownRequests).toBe(before + 1)
     }),
   )
 })

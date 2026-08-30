@@ -71,6 +71,7 @@ export const GlobalPaths = {
   config: "/global/config",
   dispose: "/global/dispose",
   upgrade: "/global/upgrade",
+  shutdown: "/global/shutdown",
 } as const
 
 export const GlobalApi = HttpApi.make("global").add(
@@ -132,6 +133,16 @@ export const GlobalApi = HttpApi.make("global").add(
           identifier: "global.upgrade",
           summary: "Upgrade opencode",
           description: "Upgrade opencode to the specified version.",
+        }),
+      ),
+      HttpApiEndpoint.post("shutdown", GlobalPaths.shutdown, {
+        success: described(Schema.Boolean, "Server shutdown requested"),
+      }).annotateMerge(
+        OpenApi.annotations({
+          identifier: "global.shutdown",
+          summary: "Shut down the server",
+          description:
+            "Stop the OpenCode server process on the host. All connected clients are disconnected; running sessions are interrupted and resume when the server starts again.",
         }),
       ),
     )

@@ -26,12 +26,19 @@ export const errorLayer = HttpRouter.middleware<{ handles: unknown }>()((effect)
       }
 
       const ref = `err_${crypto.randomUUID().slice(0, 8)}`
+      const errorMessage =
+        error instanceof Error
+          ? error.stack || error.message
+          : typeof error === "object" && error !== null && "message" in error
+            ? String((error as any).message)
+            : Cause.pretty(cause)
+      console.error(`\n🔥 [Server Defect ${ref}]:`, errorMessage, "\n")
 
       return Effect.logError("failed", { ref, error, cause: Cause.pretty(cause) }).pipe(
         Effect.as(
           HttpServerResponse.jsonUnsafe(
             new NamedError.Unknown({
-              message: "Unexpected server error. Check server logs for details.",
+              message: `Server Error (${ref}): ${error instanceof Error ? error.message : String(error)}`,
               ref,
             }).toObject(),
             { status: 500 },
