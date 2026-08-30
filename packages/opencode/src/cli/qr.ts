@@ -29,7 +29,7 @@ export function detectNetworkEndpoints(port: number): NetworkEndpoints {
         const json = JSON.parse(tsStatus.stdout)
         if (json.Self?.DNSName) {
           const dns = json.Self.DNSName.replace(/\.$/, "")
-          magicDns = `https://${dns}`
+          magicDns = `http://${dns}:${port}`
         }
       } catch {}
     }
@@ -77,20 +77,20 @@ export async function printPairingInfo(options: { port: number; password?: strin
   UI.println(UI.Style.TEXT_INFO_BOLD + "  Local access:      ", UI.Style.TEXT_NORMAL, endpoints.localhost)
 
   // Preferred Tailscale Endpoints
-  if (endpoints.tailscale) {
+  if (endpoints.magicDns) {
     UI.println(
       UI.Style.TEXT_SUCCESS_BOLD + "  Tailscale access:  ",
       UI.Style.TEXT_NORMAL,
-      endpoints.tailscale,
+      endpoints.magicDns,
       UI.Style.TEXT_SUCCESS + " (Recommended & Encrypted)",
     )
   }
-  if (endpoints.magicDns) {
+  if (endpoints.tailscale) {
     UI.println(
-      UI.Style.TEXT_SUCCESS_BOLD + "  Tailscale HTTPS:   ",
+      endpoints.magicDns ? UI.Style.TEXT_DIM + "  Tailscale IP:      " : UI.Style.TEXT_SUCCESS_BOLD + "  Tailscale access:  ",
       UI.Style.TEXT_NORMAL,
-      `${endpoints.magicDns}:${options.port}`,
-      UI.Style.TEXT_SUCCESS + " (MagicDNS)",
+      endpoints.tailscale,
+      endpoints.magicDns ? UI.Style.TEXT_DIM + " (Encrypted Mesh)" : UI.Style.TEXT_SUCCESS + " (Recommended & Encrypted)",
     )
   }
 
@@ -102,7 +102,7 @@ export async function printPairingInfo(options: { port: number; password?: strin
   }
 
   // Security warning for unencrypted LAN
-  if (!endpoints.tailscale && endpoints.lan && endpoints.lan.length > 0) {
+  if (!endpoints.tailscale && !endpoints.magicDns && endpoints.lan && endpoints.lan.length > 0) {
     UI.empty()
     UI.println(
       UI.Style.TEXT_WARNING_BOLD + "  ⚠️  Security Notice: ",
@@ -112,19 +112,20 @@ export async function printPairingInfo(options: { port: number; password?: strin
     UI.println(
       UI.Style.TEXT_DIM + "     Use Tailscale (`tailscale up`) for automatic end-to-end WireGuard encryption.",
     )
-  } else if (endpoints.tailscale) {
+  } else if (endpoints.tailscale || endpoints.magicDns) {
     UI.empty()
     UI.println(
       UI.Style.TEXT_SUCCESS + "  🔒 End-to-end WireGuard encryption active via Tailscale mesh network.",
     )
   }
 
-  // Target Pairing URL for QR code
-  const targetHostUrl = endpoints.tailscale ?? (endpoints.lan && endpoints.lan[0]) ?? endpoints.localhost
+  // Target Pairing URL for QR code (prefer MagicDNS hostname over raw IP)
+  const targetHostUrl =
+    endpoints.magicDns ?? endpoints.tailscale ?? (endpoints.lan && endpoints.lan[0]) ?? endpoints.localhost
   const urlObj = new URL(targetHostUrl)
   if (password) {
-    urlObj.username = "opencode"
-    urlObj.password = password
+    const token = Buffer.from(`opencode:${password}`).toString("base64")
+    urlObj.searchParams.set("auth_token", token)
   }
   const pairingUrl = urlObj.toString()
 
