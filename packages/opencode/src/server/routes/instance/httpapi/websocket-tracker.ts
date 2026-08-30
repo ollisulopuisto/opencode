@@ -1,6 +1,7 @@
 import { Context, Effect, Layer, Option } from "effect"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import * as Socket from "effect/unstable/socket/Socket"
+import { ClientTracker } from "@opencode-ai/server/client-tracker"
 import { socketIsStale } from "@/util/remote-pwa"
 
 export const SERVER_CLOSING_EVENT = () => new Socket.CloseEvent(1001, "server closing")
@@ -98,7 +99,13 @@ export const register = (close: Close) =>
     if (Option.isNone(tracker)) return true
     const registered = yield* tracker.value.add(close)
     if (!registered) return false
-    yield* Effect.addFinalizer(() => tracker.value.remove(close))
+    ClientTracker.connect()
+    yield* Effect.addFinalizer(() =>
+      Effect.gen(function* () {
+        yield* tracker.value.remove(close)
+        ClientTracker.disconnect()
+      }),
+    )
     return true
   })
 

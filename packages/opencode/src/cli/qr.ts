@@ -64,13 +64,13 @@ export function detectNetworkEndpoints(port: number): NetworkEndpoints {
   }
 }
 
-export async function printPairingInfo(options: { port: number; password?: string; socket?: string }) {
+export async function printPairingInfo(options: { port?: number; password?: string; socket?: string }) {
   if (options.socket) {
     UI.println(UI.Style.TEXT_INFO_BOLD + "  Socket:            ", UI.Style.TEXT_NORMAL, `unix:${options.socket}`)
     return
   }
 
-  const endpoints = detectNetworkEndpoints(options.port)
+  const endpoints = detectNetworkEndpoints(options.port ?? 0)
   const password = options.password ?? process.env.OPENCODE_SERVER_PASSWORD
 
   UI.empty()

@@ -7,6 +7,7 @@ import * as Stream from "effect/Stream"
 import { HttpServerResponse } from "effect/unstable/http"
 import { HttpApiBuilder } from "effect/unstable/httpapi"
 import * as Sse from "effect/unstable/encoding/Sse"
+import { ClientTracker } from "@opencode-ai/server/client-tracker"
 import { EventApi } from "../groups/event"
 
 function eventData(data: unknown): Sse.Event {
@@ -24,6 +25,12 @@ function eventID() {
 
 function eventResponse(events: EventV2.Interface) {
   return Effect.gen(function* () {
+    // The handler scope stays open until the SSE body ends, so the release
+    // runs when the client disconnects.
+    yield* Effect.acquireRelease(
+      Effect.sync(() => ClientTracker.connect()),
+      () => Effect.sync(() => ClientTracker.disconnect()),
+    )
     const instance = yield* InstanceState.context
     const workspaceID = yield* InstanceState.workspaceID
     // Listener registration is eager, so events published after this point cannot
