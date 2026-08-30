@@ -20,6 +20,7 @@ import { Global } from "@opencode-ai/core/global"
 import { modify, applyEdits } from "jsonc-parser"
 import { Filesystem } from "@/util/filesystem"
 import { Effect } from "effect"
+import { PRESETS } from "@opencode-ai/core/mcp/presets"
 
 function getAuthStatusIcon(status: MCP.AuthStatus): string {
   switch (status) {
@@ -98,12 +99,65 @@ export const McpCommand = cmd({
   builder: (yargs) =>
     yargs
       .command(McpAddCommand)
+      .command(McpPresetCommand)
       .command(McpListCommand)
       .command(McpAuthCommand)
       .command(McpLogoutCommand)
       .command(McpDebugCommand)
       .demandCommand(),
   async handler() {},
+})
+
+export const McpPresetCommand = effectCmd({
+  command: "preset [name]",
+  describe: "install pre-configured MCP connectors (todoist, gmail, puppeteer, postgres, github)",
+  builder: (yargs) =>
+    yargs.positional("name", {
+      describe: "preset name to install",
+      type: "string",
+      choices: ["todoist", "gmail", "puppeteer", "postgres", "github"],
+    }),
+  handler: Effect.fn("Cli.mcp.preset")(function* (args) {
+    const maybeCtx = yield* InstanceRef
+    if (!maybeCtx) return yield* Effect.die("InstanceRef not provided")
+    const ctx = maybeCtx
+
+    yield* Effect.promise(async () => {
+      UI.empty()
+      prompts.intro("Install MCP Preset")
+
+      let selectedName = args.name
+      if (!selectedName) {
+        const choice = await prompts.select({
+          message: "Select an MCP connector preset to install",
+          options: Object.values(PRESETS).map((preset) => ({
+            label: `${preset.name} — ${preset.description}`,
+            value: preset.name,
+          })),
+        })
+        if (prompts.isCancel(choice)) throw new UI.CancelledError()
+        selectedName = choice as string
+      }
+
+      const preset = PRESETS[selectedName]
+      if (!preset) {
+        prompts.log.error(`Unknown preset: ${selectedName}`)
+        prompts.outro("Aborted")
+        return
+      }
+
+      const globalConfigPath = await resolveConfigPath(Global.Path.config, true)
+      const mcpConfig: any = {
+        type: "local",
+        command: preset.command,
+        ...(preset.environment ? { environment: preset.environment } : {}),
+      }
+
+      await addMcpToConfig(preset.name, mcpConfig, globalConfigPath)
+      prompts.log.success(`Installed preset "${preset.name}" into ${globalConfigPath}`)
+      prompts.outro("Preset installed successfully")
+    })
+  }),
 })
 
 export const McpListCommand = effectCmd({

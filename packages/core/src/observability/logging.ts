@@ -46,8 +46,13 @@ function format(input: unknown) {
   return /^[^\s="\\]+$/.test(value) ? value : JSON.stringify(value)
 }
 
+import fs from "fs"
+
 export function fileLogger(file = path.join(Global.Path.log, "opencode.log"), id: string = runID) {
   // Do not set batchWindow to 0; it causes high idle CPU usage.
+  try {
+    fs.mkdirSync(path.dirname(file), { recursive: true })
+  } catch {}
   return Logger.toFile(formatter(id), file, { flag: "a" })
 }
 

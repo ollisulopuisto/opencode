@@ -8,6 +8,10 @@ and this project adheres to [Calendar Versioning](https://calver.org/) (`vYY.MM.
 ## [v26.08.30.15614] - 2026-08-30
 
 ### Added
+- Pre-configured MCP presets catalog (`@opencode-ai/core/mcp/presets`) and `opencode mcp preset` CLI installer for Todoist, Gmail, Puppeteer, PostgreSQL, and GitHub.
+- Mobile Web UI remote repository cloning modal (`DialogCloneRepoV2`).
+- One-tap "Execute Plan" card (`ExecutePlanCardV2`) for seamless Plan-to-Build agent transitions.
+- Working-tree visual diff component (`WorkingTreeDiffV2`) displaying full-repo changes and diffstats.
 - Remote Repo Spawning via built-in `repo_clone` tool (`@opencode-ai/core/tool/clone`) and `opencode clone <repo> [prompt]` CLI command.
 - Built-in `git_diff` tool (`@opencode-ai/core/tool/git-diff`) to inspect working-tree changes, unified diffs, and diffstats.
 - Ping-Pong Loop Guard in `delegate` tool preventing runaway agent loops (>10 autonomous delegations without human input).
