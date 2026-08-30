@@ -41,21 +41,34 @@ export class VerifierPolicy {
     const isRust = fs.existsSync(path.join(this.workspaceRoot, "Cargo.toml"))
     const isGo = fs.existsSync(path.join(this.workspaceRoot, "go.mod"))
 
+    let hasTypecheckScript = false
+    let isMonorepo = false
+    try {
+      const pkgPath = path.join(this.workspaceRoot, "package.json")
+      if (fs.existsSync(pkgPath)) {
+        const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"))
+        hasTypecheckScript = !!pkg.scripts?.typecheck
+        isMonorepo = !!pkg.workspaces || fs.existsSync(path.join(this.workspaceRoot, "turbo.json"))
+      }
+    } catch {}
+
     const tier0StaticCmds: string[] = []
     const tier2RegressionCmds: string[] = []
     let tier1TargetedTestTemplate: (testFiles: string[]) => string | undefined = () => undefined
 
     // 1. TypeScript / JavaScript Ecosystem
     if (isNode || isBun) {
-      if (isTs) {
+      if (hasTypecheckScript) {
+        tier0StaticCmds.push(isBun ? "bun run typecheck" : "npm run typecheck")
+      } else if (isTs) {
         tier0StaticCmds.push("tsc --noEmit")
       }
       if (isBun) {
-        tier2RegressionCmds.push("bun test")
         tier1TargetedTestTemplate = (testFiles) => (testFiles.length > 0 ? `bun test ${testFiles.join(" ")}` : undefined)
+        tier2RegressionCmds.push(isMonorepo ? "bun test packages/opencode/test harness/test" : "bun test")
       } else {
-        tier2RegressionCmds.push("npm test")
         tier1TargetedTestTemplate = (testFiles) => (testFiles.length > 0 ? `npm test -- ${testFiles.join(" ")}` : undefined)
+        tier2RegressionCmds.push("npm test")
       }
     }
 
