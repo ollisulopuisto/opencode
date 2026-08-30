@@ -6,6 +6,7 @@ import { validateSession } from "../tui/validate-session"
 import { ServerAuth } from "@/server/auth"
 import { printPairingInfo } from "@/cli/qr"
 import { HostState } from "@/cli/host-state"
+import { Prompt } from "@/cli/prompt"
 import { resolveThreadDirectory } from "./tui"
 import { Filesystem } from "@/util/filesystem"
 import { Flag } from "@opencode-ai/core/flag/flag"
@@ -147,6 +148,9 @@ export const HostCommand = cmd({
         pid: process.pid,
         startedAt: Date.now(),
       })
+      // Keep the server alive while the user scans the QR code, before any
+      // client has connected.
+      ClientTracker.suspend()
     }
 
     const url = socket ? socket : `http://127.0.0.1:${port}`
@@ -166,6 +170,24 @@ export const HostCommand = cmd({
       }
       process.exitCode = 1
       return
+    }
+
+    // The TUI's SSE cleanup rejects with an AbortError when it exits; the TUI
+    // worker normally swallows unhandled rejections, but the attached TUI runs
+    // in this process. Ignore those and surface anything else.
+    process.on("unhandledRejection", (error: unknown) => {
+      if (typeof error === "object" && error !== null && "name" in error && error.name === "AbortError") return
+      UI.error(String(error))
+    })
+
+    if (owned) {
+      UI.println(
+        UI.Style.TEXT_INFO_BOLD +
+          "Scan the QR code above to pair your phone, then press Enter to start the TUI…" +
+          UI.Style.TEXT_NORMAL,
+      )
+      await Prompt.waitForEnter()
+      ClientTracker.resume()
     }
 
     try {
@@ -217,6 +239,9 @@ export const HostCommand = cmd({
       args.idleExit > 0
         ? `exits ${args.idleExit}s after the last client disconnects`
         : "stays running until you stop it with Ctrl-C"
+    if (!args.noQr) {
+      await printPairingInfo({ port, socket, password })
+    }
     UI.println(
       UI.Style.TEXT_DIM + `TUI detached — server still up (${ClientTracker.count()} client(s) connected), ${idleNote}.`,
     )

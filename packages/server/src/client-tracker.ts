@@ -12,6 +12,7 @@ export type Options = {
 export class Tracker {
   #connections = 0
   #timer: ReturnType<typeof setTimeout> | undefined
+  #suspended = false
 
   constructor(private readonly options: Options) {
     this.#arm()
@@ -28,6 +29,18 @@ export class Tracker {
 
   disconnect() {
     this.#connections = Math.max(0, this.#connections - 1)
+    if (this.#connections === 0 && !this.#suspended) this.#arm()
+  }
+
+  // Pauses idle exit (e.g. while a command waits for the user to pair a
+  // client). Connections are still counted; resume() re-arms the timer.
+  suspend() {
+    this.#suspended = true
+    this.#disarm()
+  }
+
+  resume() {
+    this.#suspended = false
     if (this.#connections === 0) this.#arm()
   }
 
@@ -70,6 +83,14 @@ export function connect() {
 
 export function disconnect() {
   current?.disconnect()
+}
+
+export function suspend() {
+  current?.suspend()
+}
+
+export function resume() {
+  current?.resume()
 }
 
 export function count() {

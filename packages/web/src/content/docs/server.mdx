@@ -100,6 +100,7 @@ The network flags from `opencode serve` (`--port`, `--hostname`, `--mdns`, `--co
 
 #### Lifecycle
 
+- After starting a server, `opencode host` waits for you to press Enter before launching the TUI, so you have time to scan the QR code. The server stays alive while you pair; the idle timer below only starts once clients have connected.
 - Exiting a TUI only detaches that client; the server keeps running for the other attached clients (TUI, PWA, scripts).
 - The process that started the server keeps it alive until the last client has been disconnected for `--idle-exit` seconds, then shuts everything down. Set `--idle-exit 0` to keep the server running until you stop it with `Ctrl-C`.
 - Connection details for the running server (port, password) are stored in `~/.local/share/opencode/state/host.json` (mode `0600`) so later `opencode host` invocations can find and authenticate to it. The file is removed when the server exits cleanly.

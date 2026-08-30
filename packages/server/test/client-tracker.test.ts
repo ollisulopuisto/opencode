@@ -57,6 +57,40 @@ describe("Tracker", () => {
     await tick(80)
     expect(idle).toBe(0)
   })
+
+  test("suspend pauses the idle callback and resume rearms when idle", async () => {
+    let idle = 0
+    const tracker = new Tracker({ graceMs: 20, onIdle: () => idle++ })
+    tracker.suspend()
+    await tick(80)
+    expect(idle).toBe(0)
+    tracker.resume()
+    await tick(80)
+    expect(idle).toBe(1)
+  })
+
+  test("connections during suspend do not trigger onIdle until resume", async () => {
+    let idle = 0
+    const tracker = new Tracker({ graceMs: 20, onIdle: () => idle++ })
+    tracker.suspend()
+    tracker.connect()
+    tracker.disconnect()
+    await tick(80)
+    expect(idle).toBe(0)
+    tracker.resume()
+    await tick(80)
+    expect(idle).toBe(1)
+  })
+
+  test("resume with connected clients does not fire onIdle", async () => {
+    let idle = 0
+    const tracker = new Tracker({ graceMs: 20, onIdle: () => idle++ })
+    tracker.suspend()
+    tracker.connect()
+    tracker.resume()
+    await tick(80)
+    expect(idle).toBe(0)
+  })
 })
 
 describe("ClientTracker singleton", () => {
