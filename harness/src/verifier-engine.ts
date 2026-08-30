@@ -181,7 +181,7 @@ export class MultiTierVerifierEngine {
   }
 
   /**
-   * Audits file modifications for test evasion patterns (commented-out tests, skipped tests, disabled assertions).
+   * Audits file modifications for test evasion patterns (commented-out tests, skipped tests, disabled assertions, empty test blocks).
    */
   private auditDiffIntegrity(cwd: string, changedFiles: string[]): { passed: boolean; issues: string[] } {
     const issues: string[] = []
@@ -194,14 +194,22 @@ export class MultiTierVerifierEngine {
         const content = fs.readFileSync(fullPath, "utf-8")
 
         // Check for test evasion anti-patterns
-        if (content.includes(".skip(") || content.includes(".only(")) {
-          issues.push(`Test file '${file}' contains disabled or exclusive tests (.skip / .only)`)
+        if (content.includes(".skip(") || content.includes(".only(") || content.includes("it.todo(")) {
+          issues.push(`Test file '${file}' contains disabled or exclusive tests (.skip / .only / .todo)`)
         }
-        if (content.includes("@pytest.mark.skip")) {
+        if (content.includes("@pytest.mark.skip") || content.includes("@unittest.skip")) {
           issues.push(`Python test file '${file}' contains skipped test decorator (@pytest.mark.skip)`)
         }
         if (content.includes("// it(") || content.includes("// test(") || content.includes("// expect(")) {
           issues.push(`File '${file}' contains commented-out test assertions (// it / // test / // expect)`)
+        }
+        // Vacuous/empty test block detection
+        if (/\b(it|test)\s*\(\s*["'`][^"'`]+["'`]\s*,\s*(\(\s*\)|async\s*\(\s*\))\s*=>\s*\{\s*\}\s*\)/.test(content)) {
+          issues.push(`Test file '${file}' contains empty vacuous test body with no assertions`)
+        }
+        // Trivial pass dummy assertions
+        if (/expect\s*\(\s*true\s*\)\s*\.toBe\s*\(\s*true\s*\)/.test(content) || /assert\s+True\b/.test(content)) {
+          issues.push(`Test file '${file}' contains trivial dummy assertion (expect(true).toBe(true))`)
         }
       } catch {
         // ignore

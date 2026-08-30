@@ -5,6 +5,7 @@ import { HttpServerResponse } from "effect/unstable/http"
 import { HttpApiBuilder } from "effect/unstable/httpapi"
 import * as Sse from "effect/unstable/encoding/Sse"
 import { Api } from "../api"
+import { ClientTracker } from "../client-tracker"
 
 const subscriberCapacity = 256
 
@@ -22,6 +23,12 @@ export const EventHandler = HttpApiBuilder.group(Api, "server.event", (handlers)
     const events = yield* EventV2.Service
     return handlers.handleRaw("event.subscribe", () =>
       Effect.gen(function* () {
+        // The handler scope stays open until the SSE body ends, so the release
+        // runs when the client disconnects.
+        yield* Effect.acquireRelease(
+          Effect.sync(() => ClientTracker.connect()),
+          () => Effect.sync(() => ClientTracker.disconnect()),
+        )
         const connected = {
           id: EventV2.ID.create(),
           type: "server.connected",

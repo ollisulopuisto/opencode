@@ -45,6 +45,15 @@ export class LoopDetector {
   }
 
   record(event: ToolCallEvent): LoopDetectionResult {
+    const existingIndex = this.history.findIndex((e) => e.id === event.id)
+    if (existingIndex >= 0) {
+      this.history[existingIndex] = event
+      return {
+        loopDetected: false,
+        count: 0,
+        recommendedAction: "CONTINUE",
+      }
+    }
     this.history.push(event)
 
     // Check 1: Repeated identical error signatures (higher priority on errors)

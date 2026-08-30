@@ -47,12 +47,25 @@ describe("FailureClassifier", () => {
     expect(diagnosis.suggestedAction).toBe("ESCALATE_TO_GEMINI")
   })
 
-  it("generates structured recovery prompt", () => {
+  it("generates structured recovery prompt with hypothesis shifting", () => {
     const diagnosis = FailureClassifier.diagnose("TypeError: x is not a function", 1, 1)
-    const prompt = FailureClassifier.buildRecoveryPrompt(diagnosis, "Fix null pointer")
+    const prompt = FailureClassifier.buildRecoveryPrompt(diagnosis, "Fix null pointer", {
+      failedHypotheses: ["Optional chaining on user object"],
+    })
     expect(prompt).toContain("RECOVERY PROTOCOL TRIGGERED")
     expect(prompt).toContain("TYPE_FAILURE")
     expect(prompt).toContain("1. STOP")
-    expect(prompt).toContain("3. HYPOTHESIZE")
+    expect(prompt).toContain("3. HYPOTHESIS SHIFT")
+    expect(prompt).toContain("PREVIOUS FAILED HYPOTHESES")
+    expect(prompt).toContain("Optional chaining on user object")
+  })
+
+  it("injects anti-oscillation rules when loop is detected", () => {
+    const diagnosis = FailureClassifier.diagnose("Loop detected: oscillating file edits", 2, 2)
+    const prompt = FailureClassifier.buildRecoveryPrompt(diagnosis, "Fix type error", {
+      antiOscillationAdvice: "Change the return type in interface definition instead of casting",
+    })
+    expect(prompt).toContain("ANTI-OSCILLATION ENFORCEMENT")
+    expect(prompt).toContain("Change the return type in interface definition instead of casting")
   })
 })

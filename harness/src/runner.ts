@@ -6,6 +6,8 @@
  * monitors real-time streaming JSON events, and executes verification gates.
  */
 
+import * as fs from "node:fs"
+import * as path from "node:path"
 import { TaskStateMachine, type CanonicalState } from "./state"
 import { VerificationGate, type VerificationResult } from "./verifier"
 import { LoopDetector, type ToolCallEvent } from "./loop-detector"
@@ -17,10 +19,13 @@ import { ToolOutputNormalizer } from "./normalizer"
 import { ContextBridge } from "./context-bridge"
 import { ModelRouter } from "./model-router"
 import { MultiTierVerifierEngine, type MultiTierVerificationResult } from "./verifier-engine"
+import { ProjectMemory } from "./project-memory"
 
 import { TaskComplexityClassifier, type ComplexityAssessment } from "./classifier"
 import { TaskPlanner, type ExecutionPlan } from "./planner"
 import { PlanValidator } from "./plan-validator"
+import { SupervisorBridge, type SupervisoryDirective } from "./supervisor-bridge"
+import { SupervisorProtocol } from "./supervisor-protocol"
 
 export interface HarnessTaskConfig {
   taskId: string
@@ -31,6 +36,7 @@ export interface HarnessTaskConfig {
   verificationCmd?: string
   budget?: Partial<ChangeBudget>
   maxRecoveries?: number
+  maxSupervisoryInterventions?: number
   timeoutMs?: number
   enablePersistence?: boolean
   skipPlanning?: boolean
@@ -57,6 +63,8 @@ export class OpenCodeHarnessRunner {
   private bridge: ContextBridge
   private modelRouter: ModelRouter
   private verifierEngine: MultiTierVerifierEngine
+  private projectMemory: ProjectMemory
+  private supervisorBridge: SupervisorBridge
   private plan?: ExecutionPlan
 
   constructor(config: HarnessTaskConfig) {
@@ -67,6 +75,7 @@ export class OpenCodeHarnessRunner {
       model: activeModel,
       agent: "build",
       maxRecoveries: 2,
+      maxSupervisoryInterventions: 2,
       timeoutMs: 180_000,
       enablePersistence: true,
       skipPlanning: false,
@@ -78,12 +87,17 @@ export class OpenCodeHarnessRunner {
     this.budgetGuard = new ChangeBudgetGuard(this.config.budget)
     this.telemetry = new TaskTelemetry(this.config.taskId, this.config.model)
     this.persistence = new TaskStatePersistence(this.config.cwd)
+    this.projectMemory = new ProjectMemory(this.config.cwd)
+    this.supervisorBridge = new SupervisorBridge(
+      new SupervisorProtocol(this.config.maxSupervisoryInterventions ?? 2)
+    )
     this.normalizer = new ToolOutputNormalizer({
       logsDir: `${this.config.cwd}/.opencode/logs`,
     })
     this.bridge = new ContextBridge({
       persistence: this.persistence,
       budgetGuard: this.budgetGuard,
+      projectMemory: this.projectMemory,
       baseDir: this.config.cwd,
     })
     this.verifierEngine = new MultiTierVerifierEngine(this.config.cwd)
@@ -132,8 +146,9 @@ export class OpenCodeHarnessRunner {
     let prompt = this.bridge.buildInitialPrompt(this.stateMachine)
     let recoveryCount = 0
     let sessionId: string | undefined
+    const failedHypotheses: string[] = []
 
-    while (recoveryCount <= (this.config.maxRecoveries ?? 2)) {
+    while (recoveryCount <= (this.config.maxRecoveries ?? 2) + (this.config.maxSupervisoryInterventions ?? 2)) {
       this.telemetry.recordTurn()
       this.stateMachine.incrementTurn()
       
@@ -151,9 +166,13 @@ export class OpenCodeHarnessRunner {
         this.telemetry.recordLoopHalt()
         this.stateMachine.transition("RECOVER", "Loop detected during tool execution")
         this.stateMachine.recordFailure("LOOP_DETECTED", "Repeated tool calls detected", turnOutcome.stepCount)
+        failedHypotheses.push(`Loop on step ${turnOutcome.stepCount}: repeated tool call pattern`)
         
         const diagnosis = FailureClassifier.diagnose("Loop detected: identical tool calls repeated", 1, recoveryCount)
-        prompt = FailureClassifier.buildRecoveryPrompt(diagnosis, this.config.objective)
+        prompt = FailureClassifier.buildRecoveryPrompt(diagnosis, this.config.objective, {
+          failedHypotheses,
+          antiOscillationAdvice: "Completely discard the previous edit approach and structure. Formulate an alternative implementation strategy.",
+        })
         recoveryCount++
         continue
       }
@@ -179,6 +198,13 @@ export class OpenCodeHarnessRunner {
         if (this.config.enablePersistence) {
           this.bridge.checkpoint(this.stateMachine, "complete_verified")
         }
+        this.projectMemory.recordTaskResult(
+          this.config.taskId,
+          this.config.objective,
+          "success",
+          this.stateMachine.snapshot.filesChanged,
+          "Multi-tier verification passed with 100% confidence"
+        )
         return {
           success: completeResult.success,
           taskId: this.config.taskId,
@@ -192,17 +218,63 @@ export class OpenCodeHarnessRunner {
       // 3. Verification Failed -> RECOVER
       console.warn(`[Harness] Multi-Tier Verification Failed on Tier ${verificationResult.failedTier}`)
       const failureMsg = verificationResult.diagnostics[0] ?? "Verification failed"
+      failedHypotheses.push(`Attempt ${recoveryCount + 1}: ${failureMsg}`)
       this.stateMachine.transition("RECOVER", `Verification failed: ${failureMsg}`)
       this.stateMachine.recordFailure("TEST_FAILURE", failureMsg, turnOutcome.stepCount, verificationResult.diagnostics.join("; "))
       this.telemetry.recordFailureType("TEST_FAILURE")
 
       recoveryCount++
       if (recoveryCount > (this.config.maxRecoveries ?? 2)) {
-        console.error(`[Harness] Max recovery attempts (${this.config.maxRecoveries}) exceeded.`)
-        this.stateMachine.transition("BLOCKED", "Exceeded max autonomous recovery attempts")
+        // Evaluate Self-Contained Supervisory Escalation
+        const escalationEval = this.supervisorBridge.getProtocol().evaluateEscalation({
+          taskId: this.config.taskId,
+          trigger: "REPEATED_RECOVERY_FAILURE",
+          recoveryAttempts: recoveryCount,
+          failedTests: this.stateMachine.snapshot.testsRun.filter((t) => !t.passed).map((t) => t.command),
+          budgetViolations: [],
+          contextDetails: verificationResult.diagnostics.join("; "),
+        })
+
+        if (escalationEval.allowed) {
+          console.log(`[Harness] Local recovery attempts exhausted. Triggering Self-Contained Supervisory Directive...`)
+          const directive: SupervisoryDirective = {
+            rootCauseDiagnosis: `Root cause identified in test failure: ${verificationResult.diagnostics.join("; ")}`,
+            actionableDirective: `Target the exact failed assertion in ${failureMsg}. Do not perform extraneous modifications.`,
+            newHypothesis: `Implement precise logic satisfying test assertions while respecting strict write-set bounds.`,
+          }
+
+          this.supervisorBridge.applyDirective(this.stateMachine, directive)
+
+          prompt = [
+            `# 🎯 SUPERVISORY DIRECTIVE (ESCALATION APPLIED)`,
+            `DIAGNOSIS: ${directive.rootCauseDiagnosis}`,
+            `DIRECTIVE: ${directive.actionableDirective}`,
+            `NEW HYPOTHESIS: ${directive.newHypothesis}`,
+            ``,
+            `PREVIOUS FAILED HYPOTHESES (BANNED):`,
+            ...failedHypotheses.map((h, i) => `  ${i + 1}. ${h}`),
+            ``,
+            `MANDATORY ACTION:`,
+            `1. Make the precise minimal code edit specified above.`,
+            `2. Run the test command to verify before claiming completion.`,
+          ].join("\n")
+
+          this.stateMachine.transition("EXECUTE", "Executing supervisory-guided recovery turn")
+          continue
+        }
+
+        console.error(`[Harness] Max recovery attempts and supervisory quota exceeded.`)
+        this.stateMachine.transition("BLOCKED", "Exceeded max autonomous recovery and supervisory attempts")
         if (this.config.enablePersistence) {
           this.bridge.checkpoint(this.stateMachine, "blocked")
         }
+        this.projectMemory.recordTaskResult(
+          this.config.taskId,
+          this.config.objective,
+          "failed",
+          this.stateMachine.snapshot.filesChanged,
+          verificationResult.diagnostics.join("; ")
+        )
         return {
           success: false,
           taskId: this.config.taskId,
@@ -218,7 +290,9 @@ export class OpenCodeHarnessRunner {
         recoveryCount,
         recoveryCount
       )
-      prompt = FailureClassifier.buildRecoveryPrompt(diagnosis, this.config.objective)
+      prompt = FailureClassifier.buildRecoveryPrompt(diagnosis, this.config.objective, {
+        failedHypotheses,
+      })
       this.stateMachine.transition("EXECUTE", "Executing recovery attempt")
     }
 
@@ -242,41 +316,74 @@ export class OpenCodeHarnessRunner {
     promptText: string,
     sessionId?: string
   ): Promise<{ sessionId?: string; interruptedByLoop: boolean; stepCount: number }> {
-    const args = [
-      "opencode",
-      "run",
-      promptText,
-      "--format",
-      "json",
-      "--auto",
-      "--model",
-      this.config.model!,
-      "--agent",
-      this.config.agent!,
-      "--dir",
-      this.config.cwd,
-    ]
+    const localTsEntry = path.resolve(__dirname, "../../packages/opencode/src/index.ts")
+    const args = fs.existsSync(localTsEntry)
+      ? [
+          "bun",
+          "run",
+          "--conditions=browser",
+          localTsEntry,
+          "run",
+          promptText,
+          "--format",
+          "json",
+          "--auto",
+          "--model",
+          this.config.model!,
+          "--agent",
+          this.config.agent!,
+          "--dir",
+          this.config.cwd,
+        ]
+      : [
+          process.env.OPENCODE_BIN || "opencode",
+          "run",
+          promptText,
+          "--format",
+          "json",
+          "--auto",
+          "--model",
+          this.config.model!,
+          "--agent",
+          this.config.agent!,
+          "--dir",
+          this.config.cwd,
+        ]
 
     if (sessionId) {
       args.push("--session", sessionId, "--continue")
     }
 
-    const opencodeDir = `${this.config.cwd}/.opencode`
     const proc = Bun.spawn(args, {
       cwd: this.config.cwd,
       stdout: "pipe",
       stderr: "pipe",
       env: {
         ...process.env,
-        XDG_DATA_HOME: process.env.XDG_DATA_HOME ?? `${opencodeDir}/data`,
-        XDG_CACHE_HOME: process.env.XDG_CACHE_HOME ?? `${opencodeDir}/cache`,
-        XDG_STATE_HOME: process.env.XDG_STATE_HOME ?? `${opencodeDir}/state`,
       },
     })
 
     let capturedSessionId: string | undefined = sessionId
     let interruptedByLoop = false
     let stepCount = 0
+
+    // Stream stderr asynchronously to capture error diagnostics
+    const stderrReader = (proc.stderr as ReadableStream<Uint8Array>).getReader()
+    const stderrDecoder = new TextDecoder()
+    ;(async () => {
+      try {
+        while (true) {
+          const { done, value } = await stderrReader.read()
+          if (done) break
+          const text = stderrDecoder.decode(value)
+          if (text.trim() && (text.includes("Error") || text.includes("error") || text.includes("WARN"))) {
+            console.warn(`[OpenCode Subprocess Stderr] ${text.trim()}`)
+          }
+        }
+      } catch {
+        // stream closed
+      }
+    })()
 
     // Read stdout line by line
     const reader = (proc.stdout as ReadableStream<Uint8Array>).getReader()
@@ -314,8 +421,10 @@ export class OpenCodeHarnessRunner {
             // Normalize tool output
             const normalized = this.normalizer.normalize(toolName, String(rawToolOutput))
 
+            const toolCallId = part.id ?? part.callID ?? part.callId ?? part.toolCallId ?? `${toolName}:${JSON.stringify(toolArgs)}`
+
             const toolEvent: ToolCallEvent = {
-              id: part.id ?? String(Date.now()),
+              id: toolCallId,
               tool: toolName,
               args: toolArgs,
               output: normalized.summary,

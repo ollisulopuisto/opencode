@@ -1,12 +1,6 @@
-/**
- * OpenCode Harness V5.2 - Dependency & Test Mapping Engine
- * 
- * Maps source files to their corresponding test suites and caches
- * relationship graphs in .opencode/test-map.json for Tier 1 targeted testing.
- */
-
 import * as fs from "node:fs"
 import * as path from "node:path"
+import { PerformanceCacheEngine } from "./cache-engine"
 
 export interface TestMapping {
   sourceFile: string
@@ -24,16 +18,21 @@ export interface TestMapRegistry {
 export class TestMapper {
   private workspaceRoot: string
   private cachePath: string
+  private cacheEngine: PerformanceCacheEngine
 
   constructor(workspaceRoot: string = process.cwd()) {
     this.workspaceRoot = path.resolve(workspaceRoot)
     this.cachePath = path.join(this.workspaceRoot, ".opencode", "test-map.json")
+    this.cacheEngine = new PerformanceCacheEngine(this.workspaceRoot)
   }
 
   /**
-   * Discovers all test files across standard project layouts.
+   * Discovers all test files across standard project layouts (cached).
    */
   discoverAllTestFiles(): string[] {
+    const cached = this.cacheEngine.get<string[]>("test_files_all")
+    if (cached) return cached
+
     const testFiles: string[] = []
     const walk = (dir: string) => {
       if (!fs.existsSync(dir)) return
@@ -54,6 +53,7 @@ export class TestMapper {
     }
 
     walk(this.workspaceRoot)
+    this.cacheEngine.set("test_files_all", testFiles, { ttlMs: 30_000 })
     return testFiles
   }
 

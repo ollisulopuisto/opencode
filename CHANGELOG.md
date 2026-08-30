@@ -5,6 +5,54 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Calendar Versioning](https://calver.org/) (`vYY.MM.DD.N`).
 
+## [v26.08.30.15637] - 2026-08-30
+
+### Added
+- **Remote PWA & Host Collaboration Core** (`patches/upstream/08-feat-remote-pwa-host-and-mobile-enhancements.patch`):
+  - `opencode host` CLI command sharing unified server state across terminal TUI and browser/PWA clients.
+  - Tailscale HTTPS / Serve loopback binding and automated QR code pairing for remote mobile access.
+  - Interactive Mermaid markdown rendering with touch pinch-zoom support on mobile devices.
+  - Streaming-safe append-only text tail preserving selection states during real-time model output streaming.
+  - Hierarchical slash-command popover grouping custom and built-in commands.
+  - Safe server file view endpoints (`/vcs/file-view`) with path containment validation against symlink breakouts.
+
+### Fixed
+- **GitHub Actions Node 24 Runtime Compliance**: Configured `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true` in workflow environment variables across `.github/workflows/publish.yml`, `.github/workflows/typecheck.yml`, and `.github/workflows/release.yml` to prevent Node.js 20 deprecation warnings.
+- **Strict Lint Compliance**: Escaped CSS zero-width space unicode character in prompt input component class name (`prompt-input/index.tsx`) and removed redundant non-null assertion in e2e timeline transport test (`session-timeline-transport.spec.ts`), achieving 0 errors across 3,406 files in `oxlint`.
+
+## [v26.08.30.15636] - 2026-08-30
+
+### Added
+- **Native OpenCode Harness V6.0 Architecture** (`MASTER_DESIGN_V6.0.md`, `EXECUTION_PLAYBOOK_V6.0.md`): Integrated in-process execution core eliminating external subprocess spawning and hardcoded CLI sidecar dependencies.
+- **First-Class SystemContext Task State Source** (`@opencode-ai/core/system-context/task-state`): Native `ContextSource<TaskState>` implementation with Schema JSON codec, baseline renderer, and chronological `Mid-Conversation System Message` updates across compaction epochs.
+- **Monorepo-Integrated Harness Governance Core** (`@opencode-ai/core/harness`):
+  - Deterministic 4-Tier Verification Gate (`verifier.ts`, `verifier-policy.ts`) with static typechecks, scoped test mapping, full workspace regression, and anti-evasion diff audit.
+  - Real-Time Step-2 Loop & Oscillation Detector (`loop-detector.ts`) intercepting identical tool calls, reverting edits, and repeating error states.
+  - Strict Change Budget & Write-Set Guard (`budget.ts`).
+  - Task Complexity Classifier (`classifier.ts`) and DAG Plan Validator (`plan-validator.ts`).
+  - Failure Taxonomy & Structured Recovery Protocol Engine (`failure.ts`).
+  - Tool Output Normalizer & Disk Log Spill (`normalizer.ts`).
+  - Long-Term Project Memory (`project-memory.ts`) and Git Lifecycle Engine (`git-lifecycle.ts`).
+  - Self-Contained Dynamic Model Router (`model-router.ts`) for multi-lane role routing and fallback cascading.
+- **Full 60-Task Benchmark Matrix Evaluation** (`opencode-harness-audit/benchmark-60-results.md`): 95.0% verified completion rate (57/60 tasks), 83.3% first-pass rate, 0 change budget violations, and 14 loop halts prevented.
+
+## [v26.08.30.15635] - 2026-08-30
+
+### Added
+- Interactive Workspace Onboarding Wizard & Initialization Engine (`onboarding.ts`): Autonomous environment & test discovery, interactive economic ROI preference selection (`flat_fee_first`, `balanced`, `performance_first`), multi-tier test gate setup, project memory seeding, and CLI command `opencode harness init` / `--init`.
+- Automated Model Cost-Benefit & ROI Analysis Engine (`model-roi.ts`): Near-automatic provider discovery (`auth.json` / env), economic tier modeling (flat-fee vs metered pay-as-you-go), customizable ROI policies (`flat_fee_first`, `balanced`, `performance_first`, `lowest_cost`), role assignment mapper, and CLI inspection (`opencode harness --roi`).
+- Phase 9 Performance & Runtime Acceleration Engine (`cache-engine.ts`, `process-pool.ts`): Mtime-invalidated repository dependency cache, bounded subprocess resource pooling with execution timeouts, and multi-tier test fast-failing.
+- Phase 10 Git Lifecycle & Release Engine (`git-lifecycle.ts`): Autonomous Conventional Commit synthesis, CalVer tracking, structured Pull Request generation with verification evidence, and ephemeral worktree cleanup.
+- Phase 8 Model-Pool & Reasoning Optimization (`reasoning-tuner.ts`, `prompt-adapter.ts`): Adaptive reasoning effort calculation (low/medium/high/highest) by task complexity and failure recovery depth, with model-family instruction framing.
+- Long-Term Project Memory & Repository Intelligence Engine (`project-memory.ts`): Persistent workspace indexing, conventions extraction, learned rules, architectural risk warnings, and cross-task memory feedback loop.
+- Built-in `opencode harness [objective]` top-level CLI command (`@opencode-ai/opencode/cli/cmd/harness`) supporting autonomous execution, DAG planning, verification gates, and `--smoke` / `--bench` flags.
+- Concurrent Full 60-Task Benchmark Matrix runner (`full-benchmark-runner.ts`) with configurable multi-worker concurrency and automated markdown reporting.
+- Executed and validated the complete 6-Task Canonical Smoke Benchmark Suite (`smoke-runner.ts`) across all categories (`bugfix`, `feature`, `refactor`, `debugging`, `multifile`, `unfamiliar`) with a 100% verified pass rate (6/6 tasks) using `opencode-go/glm-5.3-flash`.
+
+### Fixed
+- Fixed environment credential inheritance in headless subprocess runner to preserve system `~/.local/share/opencode/auth.json` provider keys.
+- Enhanced `LoopDetector` and subprocess runner with stable tool call ID tracking and event deduplication for real-time streaming tool executions.
+
 ## [v26.08.30.15634] - 2026-08-30
 
 ### Fixed

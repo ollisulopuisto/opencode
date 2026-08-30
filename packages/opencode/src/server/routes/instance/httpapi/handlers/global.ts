@@ -13,6 +13,7 @@ import { HttpApiBuilder, HttpApiError } from "effect/unstable/httpapi"
 import * as Sse from "effect/unstable/encoding/Sse"
 import { RootHttpApi } from "../api"
 import { GlobalUpgradeInput } from "../groups/global"
+import { ClientTracker } from "@opencode-ai/server/client-tracker"
 
 function eventData(data: unknown): Sse.Event {
   return {
@@ -26,6 +27,12 @@ function eventData(data: unknown): Sse.Event {
 function eventResponse() {
   return Effect.gen(function* () {
     yield* Effect.logInfo("global event connected")
+    // The handler scope stays open until the SSE body ends, so the release
+    // runs when the client disconnects.
+    yield* Effect.acquireRelease(
+      Effect.sync(() => ClientTracker.connect()),
+      () => Effect.sync(() => ClientTracker.disconnect()),
+    )
     const events = Stream.callback<GlobalBusEvent>((queue) => {
       const handler = (event: GlobalBusEvent) => Queue.offerUnsafe(queue, event)
       return Effect.acquireRelease(

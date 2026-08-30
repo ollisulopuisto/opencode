@@ -8,6 +8,12 @@
   </a>
 </p>
 <p align="center">The open source AI coding agent.</p>
+
+> [!NOTE]
+> **Experimental Pre-Alpha Fork (`ollisulopuisto/opencode`)**  
+> This development fork introduces the **OpenCode Autonomous Engineering Harness V6.0** (deterministic multi-tier verification gates, real-time Step-2 loop interception, and economic ROI routing) and **Tailscale Remote PWA Host Mode**.  
+> For the official upstream repository, visit [anomalyco/opencode](https://github.com/anomalyco/opencode).
+
 <p align="center">
   <a href="https://opencode.ai/discord"><img alt="Discord" src="https://img.shields.io/discord/1391832426048651334?style=flat-square&label=discord" /></a>
   <a href="https://www.npmjs.com/package/opencode-ai"><img alt="npm" src="https://img.shields.io/npm/v/opencode-ai?style=flat-square" /></a>

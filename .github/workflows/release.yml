@@ -1,0 +1,228 @@
+name: Release & Publish
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: 'CalVer or SemVer bump type'
+        required: false
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+      version:
+        description: 'Explicit version override (e.g. v26.08.30.15637)'
+        required: false
+        type: string
+      dry_run:
+        description: 'Run build and checks without publishing release assets'
+        required: false
+        type: boolean
+        default: false
+      prerelease:
+        description: 'Mark release as pre-release on GitHub'
+        required: false
+        type: boolean
+        default: true
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  packages: write
+  id-token: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  validate:
+    name: Validate & Quality Gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "24"
+
+      - name: Setup Bun
+        uses: ./.github/actions/setup-bun
+
+      - name: Run Workspace Typecheck
+        run: bun typecheck
+
+      - name: Run Linter
+        run: bun run lint
+
+      - name: Run Core & Harness Unit Tests
+        run: |
+          bun test --cwd harness
+          bun test --cwd packages/core
+
+  build-binaries:
+    name: Build CLI Binaries (${{ matrix.target.os }}-${{ matrix.target.arch }})
+    needs: validate
+    runs-on: ${{ matrix.target.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - os: linux
+            arch: x64
+            runner: ubuntu-latest
+            archive_ext: tar.gz
+          - os: linux
+            arch: arm64
+            runner: ubuntu-24.04-arm
+            archive_ext: tar.gz
+          - os: darwin
+            arch: arm64
+            runner: macos-latest
+            archive_ext: zip
+          - os: darwin
+            arch: x64
+            runner: macos-13
+            archive_ext: zip
+          - os: windows
+            arch: x64
+            runner: windows-latest
+            archive_ext: zip
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Setup Bun
+        uses: ./.github/actions/setup-bun
+
+      - name: Build Single Platform Binary
+        run: ./packages/opencode/script/build.ts --single
+        env:
+          OPENCODE_VERSION: ${{ inputs.version || github.ref_name }}
+
+      - name: Package Release Archive (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          mkdir -p dist-archives
+          cd packages/opencode/dist
+          for dir in opencode-*; do
+            if [ -d "$dir" ]; then
+              if [[ "${{ matrix.target.archive_ext }}" == "tar.gz" ]]; then
+                tar -czf "../../dist-archives/${dir}.tar.gz" -C "$dir/bin" .
+              else
+                zip -r "../../dist-archives/${dir}.zip" "$dir/bin"
+              fi
+            fi
+          done
+
+      - name: Package Release Archive (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist-archives
+          Get-ChildItem -Directory -Path packages/opencode/dist/opencode-* | ForEach-Object {
+            $name = $_.Name
+            Compress-Archive -Path "$($_.FullName)\bin\*" -DestinationPath "dist-archives\$name.zip" -Force
+          }
+
+      - name: Upload Binary Artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: binaries-${{ matrix.target.os }}-${{ matrix.target.arch }}
+          path: dist-archives/*
+
+  publish-release:
+    name: Publish GitHub Release
+    needs: [validate, build-binaries]
+    if: github.event.inputs.dry_run != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+
+      - name: Download All Binary Artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          path: release-assets
+          pattern: binaries-*
+          merge-multiple: true
+
+      - name: Generate Checksums
+        working-directory: release-assets
+        run: |
+          sha256sum * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Extract Release Notes from CHANGELOG
+        id: release_notes
+        run: |
+          VERSION="${{ inputs.version || github.ref_name }}"
+          VERSION="${VERSION#v}"
+          awk "/## \[v?${VERSION}\]/{flag=1;next}/## \[/{flag=0}flag" CHANGELOG.md > RELEASE_NOTES.md || true
+          if [ ! -s RELEASE_NOTES.md ]; then
+            echo "Release ${VERSION}" > RELEASE_NOTES.md
+          fi
+
+      - name: Create or Update GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ inputs.version || github.ref_name }}"
+          if [[ "$TAG" != v* ]]; then
+            TAG="v${TAG}"
+          fi
+          PRERELEASE_FLAG=""
+          if [ "${{ inputs.prerelease }}" != "false" ]; then
+            PRERELEASE_FLAG="--prerelease"
+          fi
+          gh release create "$TAG" release-assets/* \
+            --title "$TAG" \
+            --notes-file RELEASE_NOTES.md \
+            --draft=false \
+            $PRERELEASE_FLAG || \
+          gh release upload "$TAG" release-assets/* --clobber
+
+  publish-container:
+    name: Build & Push Container (GHCR)
+    needs: publish-release
+    if: github.event.inputs.dry_run != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & Push Multi-Arch Docker Image
+        env:
+          TAG: ${{ inputs.version || github.ref_name }}
+        run: |
+          IMAGE_NAME="ghcr.io/${{ github.repository }}"
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            -t "${IMAGE_NAME}:latest" \
+            -t "${IMAGE_NAME}:${TAG}" \
+            --push .

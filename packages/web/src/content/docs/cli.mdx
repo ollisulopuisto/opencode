@@ -127,6 +127,26 @@ opencode attach http://10.20.30.40:4096
 
 ---
 
+### host
+
+Start (or reuse) an opencode server, print a QR code for pairing the PWA / Web UI, and attach a TUI to that server — all in one command. Further `opencode host` invocations in other terminals or directories attach to the same server and share its sessions.
+
+```bash
+opencode host [project]
+```
+
+```bash
+# First terminal: starts the server, prints the QR code, opens a TUI
+opencode host
+
+# Other terminals / tmux windows: attach to the same server from other directories
+opencode host ~/work/project-b
+```
+
+See [Host a shared server](/docs/server#host-a-shared-server) for options and lifecycle details.
+
+---
+
 ### auth
 
 Command to manage credentials and login for providers.

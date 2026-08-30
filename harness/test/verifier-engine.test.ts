@@ -62,7 +62,7 @@ describe("MultiTierVerifierEngine", () => {
     expect(res.correct).toBe(false)
     expect(res.failedTier).toBe(3)
     expect(res.diagnostics.length).toBeGreaterThan(0)
-    expect(res.diagnostics[0]).toContain("disabled or exclusive tests (.skip / .only)")
+    expect(res.diagnostics.some((d) => d.includes("disabled or exclusive tests"))).toBe(true)
   })
 
   it("detects commented-out assertions during Tier 3 diff audit", async () => {
@@ -80,5 +80,22 @@ describe("MultiTierVerifierEngine", () => {
     expect(res.correct).toBe(false)
     expect(res.failedTier).toBe(3)
     expect(res.diagnostics[0]).toContain("commented-out test assertions")
+  })
+
+  it("detects vacuous empty test bodies and dummy assertions", async () => {
+    fs.writeFileSync(
+      path.join(tmpDir, "test", "empty.test.ts"),
+      `import { test } from "bun:test"\ntest("vacuous test", () => {})`
+    )
+
+    const res = await engine.runFullVerification({
+      cwd: tmpDir,
+      changedFiles: ["test/empty.test.ts"],
+      skipTiers: [0, 1, 2],
+    })
+
+    expect(res.correct).toBe(false)
+    expect(res.failedTier).toBe(3)
+    expect(res.diagnostics[0]).toContain("empty vacuous test body")
   })
 })

@@ -1,49 +1,66 @@
-/**
- * OpenCode Harness V5 - System Context State Bridge
- * 
- * Bridges TaskStateMachine and TaskStatePersistence into live OpenCode prompts,
- * ensuring seamless context injection, write-set guidance, and hypothesis tracking.
- */
-
 import { TaskStateMachine, type TaskState } from "./state"
 import { TaskStatePersistence } from "./persistence"
 import { TaskStateRenderer } from "./state-renderer"
 import { CompactionGuard } from "./compaction-guard"
 import { ChangeBudgetGuard } from "./budget"
+import { ProjectMemory } from "./project-memory"
+import { ReasoningTuner } from "./reasoning-tuner"
+import { PromptAdapter } from "./prompt-adapter"
+import { TaskComplexityClassifier, type TaskComplexity } from "./classifier"
 
 export interface ContextBridgeOptions {
   persistence?: TaskStatePersistence
   budgetGuard?: ChangeBudgetGuard
+  projectMemory?: ProjectMemory
   baseDir?: string
 }
 
 export class ContextBridge {
   private persistence: TaskStatePersistence
   private budgetGuard?: ChangeBudgetGuard
+  private projectMemory: ProjectMemory
 
   constructor(options: ContextBridgeOptions = {}) {
     this.persistence = options.persistence ?? new TaskStatePersistence(options.baseDir)
     this.budgetGuard = options.budgetGuard
+    this.projectMemory = options.projectMemory ?? new ProjectMemory(options.baseDir)
   }
 
   /**
    * Generates the initial turn prompt for a task.
    */
-  buildInitialPrompt(stateMachine: TaskStateMachine): string {
+  buildInitialPrompt(
+    stateMachine: TaskStateMachine,
+    options: { modelId?: string; complexity?: TaskComplexity; assignedWriteSet?: string[] } = {}
+  ): string {
     const state = stateMachine.snapshot
     const contextPrompt = TaskStateRenderer.render(state, { mode: "context_prompt" })
+    const memoryPrompt = this.projectMemory.formatForPrompt(state.objective, state.filesChanged)
 
-    return [
-      contextPrompt,
-      "",
-      `TASK OBJECTIVE: ${state.objective}`,
-      "",
-      `EXECUTION RULES:`,
-      `1. Follow TDD: analyze existing tests or write targeted tests before modifying code.`,
-      `2. Work within the assigned Work Unit and Write-Set whitelist.`,
-      `3. Minimize code modifications; do not refactor unrelated files.`,
-      `4. Verify your implementation thoroughly using the test suite before reporting completion.`,
-    ].join("\n")
+    const modelId = options.modelId ?? "opencode-go/glm-5.3-flash"
+    const complexity = options.complexity ?? TaskComplexityClassifier.classify(state.objective).complexity
+    const reasoningConfig = ReasoningTuner.compute({
+      complexity,
+      recoveryAttempts: 0,
+    })
+
+    const adaptedInstructions = PromptAdapter.formatInstructions({
+      modelId,
+      taskObjective: state.objective,
+      effort: reasoningConfig.effort,
+      reasoningDirectives: reasoningConfig.reasoningDirectives,
+      assignedWriteSet: options.assignedWriteSet,
+    })
+
+    const parts = [contextPrompt]
+    if (memoryPrompt) {
+      parts.push(memoryPrompt)
+    }
+
+    parts.push(`TASK OBJECTIVE: ${state.objective}`)
+    parts.push(adaptedInstructions)
+
+    return parts.join("\n\n")
   }
 
   /**

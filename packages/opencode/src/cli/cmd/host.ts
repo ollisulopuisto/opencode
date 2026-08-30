@@ -1,0 +1,294 @@
+import { cmd } from "./cmd"
+import { UI } from "@/cli/ui"
+import { errorMessage } from "@opencode-ai/tui/util/error"
+import { withNetworkOptions, resolveNetworkOptionsNoConfig, hasArg } from "@/cli/network"
+import { validateSession } from "../tui/validate-session"
+import { ServerAuth } from "@/server/auth"
+import { printPairingInfo, enableTailscaleServe, detectTailscaleServe } from "@/cli/qr"
+import { resolveHostConfig } from "@/cli/host-config"
+import { HostState } from "@/cli/host-state"
+import { Prompt } from "@/cli/prompt"
+import { resolveThreadDirectory } from "./tui"
+import { Filesystem } from "@/util/filesystem"
+import { Flag } from "@opencode-ai/core/flag/flag"
+import { ClientTracker } from "@opencode-ai/server/client-tracker"
+
+const DEFAULT_IDLE_EXIT_SECONDS = 30
+const DEFAULT_PORT = 4096
+const PAIRING_TIMEOUT_MS = 15_000
+
+export const HostCommand = cmd({
+  command: "host [project]",
+  describe: "start (or reuse) an opencode server, pair a remote client over QR, and attach a TUI to it",
+  builder: (yargs) =>
+    withNetworkOptions(yargs)
+      .positional("project", {
+        type: "string",
+        describe: "path to start the TUI in",
+      })
+      .option("password", {
+        alias: ["p"],
+        type: "string",
+        describe: "basic auth password (defaults to OPENCODE_SERVER_PASSWORD or the running server's)",
+      })
+      .option("username", {
+        alias: ["u"],
+        type: "string",
+        describe: "basic auth username (defaults to OPENCODE_SERVER_USERNAME or 'opencode')",
+      })
+      .option("continue", {
+        alias: ["c"],
+        describe: "continue the last session",
+        type: "boolean",
+      })
+      .option("session", {
+        alias: ["s"],
+        type: "string",
+        describe: "session id to continue",
+      })
+      .option("fork", {
+        type: "boolean",
+        describe: "fork the session when continuing (use with --continue or --session)",
+      })
+      .option("idle-exit", {
+        type: "number",
+        describe: "seconds to keep the server alive after the last client disconnects (0 disables)",
+        default: DEFAULT_IDLE_EXIT_SECONDS,
+      })
+      .option("no-qr", {
+        type: "boolean",
+        describe: "skip printing the QR pairing code",
+        default: false,
+      })
+      .option("mini", {
+        type: "boolean",
+        describe: "start the minimal interactive interface",
+        default: false,
+      })
+      .option("replay", {
+        type: "boolean",
+        hidden: true,
+      })
+      .option("no-replay", {
+        type: "boolean",
+        describe: "disable mini session history replay on resume and after resize",
+      })
+      .option("replay-limit", {
+        type: "number",
+        describe: "cap visible mini replay to the newest N messages",
+      }),
+  handler: async (args) => {
+    if (args.replay === true) {
+      UI.error("--replay is not supported; replay is enabled by default")
+      process.exitCode = 1
+      return
+    }
+    const noReplay = args.replay === false || args.noReplay === true
+
+    if (args.fork && !args.continue && !args.session) {
+      UI.error("--fork requires --continue or --session")
+      process.exitCode = 1
+      return
+    }
+
+    const next = resolveThreadDirectory(args.project)
+    try {
+      process.chdir(next)
+    } catch {
+      UI.error("Failed to change directory to " + next)
+      process.exitCode = 1
+      return
+    }
+    const directory = Filesystem.resolve(process.cwd())
+
+    const network = resolveNetworkOptionsNoConfig(args)
+    const socket = network.socket || undefined
+    const record = await HostState.read()
+    const suppliedPassword = args.password ?? Flag.OPENCODE_SERVER_PASSWORD ?? record?.password
+
+    const explicitPort = hasArg("--port")
+    // Bind the documented default port explicitly: a busy port fails loudly
+    // instead of drifting to a random one that invalidates saved PWA links.
+    const bindPort = explicitPort ? network.port : network.port || DEFAULT_PORT
+    const probePort = explicitPort ? network.port : record?.port ?? bindPort
+
+    const existing = await findExistingServer({ socket, port: probePort })
+    const owned = !existing
+
+    let port = existing?.port
+    let password = suppliedPassword
+    let serveUrl: string | undefined
+    let bindHostname =
+      hasArg("--hostname") || socket || network.hostname !== "127.0.0.1" ? network.hostname : "0.0.0.0"
+    let localOnly = false
+
+    if (!existing) {
+      // Enable Tailscale Serve before deciding the security posture: the
+      // serve tunnel is what makes a loopback-bound server reachable from the
+      // phone over HTTPS, and tailnet-only exposure removes the need for a
+      // password entirely.
+      serveUrl = socket ? undefined : enableTailscaleServe(bindPort)
+      const security = resolveHostConfig({
+        tailscale: !!serveUrl,
+        socket: !!socket,
+        hostnameExplicit: hasArg("--hostname"),
+        hostname: network.hostname,
+        password: suppliedPassword,
+      })
+      bindHostname = security.hostname
+      localOnly = security.hostname === "127.0.0.1"
+      if (security.generated) {
+        process.env.OPENCODE_SERVER_PASSWORD = security.password
+        UI.println(
+          UI.Style.TEXT_DIM +
+            `🔒 OPENCODE_SERVER_PASSWORD was not set. Generated password: ${security.password}` +
+            UI.Style.TEXT_NORMAL,
+        )
+      }
+      if (security.warning) {
+        UI.println(UI.Style.TEXT_WARNING + security.warning + UI.Style.TEXT_NORMAL)
+      }
+      password = security.auth ? security.password : undefined
+      const { Server } = await import("../../server/server")
+      const server = await Server.listen({
+        hostname: bindHostname,
+        port: socket ? network.port : bindPort,
+        socket,
+        mdns: network.mdns,
+        mdnsDomain: network.mdnsDomain,
+        cors: network.cors,
+        ...(args.idleExit > 0
+          ? {
+              idleExit: {
+                graceMs: args.idleExit * 1000,
+                onIdle: () => {
+                  HostState.clear().catch(() => {})
+                  process.exit(0)
+                },
+              },
+            }
+          : {}),
+      })
+      port = server.port
+      await HostState.write({
+        port: server.port,
+        socket,
+        password,
+        pid: process.pid,
+        startedAt: Date.now(),
+      })
+      // Keep the server alive while the user scans the QR code, before any
+      // client has connected.
+      ClientTracker.suspend()
+    }
+
+    const url = socket ? socket : `http://127.0.0.1:${port}`
+    const headers = ServerAuth.headers({ password, username: args.username })
+
+    // Publish real HTTPS through Tailscale Serve (tailnet-only) when starting
+    // the server; when attaching, surface it only if it is already up.
+    const httpsUrl = socket ? undefined : owned ? serveUrl : await detectTailscaleServe(bindPort)
+    if (!owned && httpsUrl) localOnly = true
+
+    if (!args.noQr) {
+      await printPairingInfo({ port, socket, password, httpsUrl, localOnly })
+    }
+
+    try {
+      await validateSession({ url, sessionID: args.session, directory, headers })
+    } catch (error) {
+      UI.error(errorMessage(error))
+      if (owned) {
+        HostState.clear().catch(() => {})
+        process.exit(1)
+      }
+      process.exitCode = 1
+      return
+    }
+
+    // The TUI's SSE cleanup rejects with an AbortError when it exits; the TUI
+    // worker normally swallows unhandled rejections, but the attached TUI runs
+    // in this process. Ignore those and surface anything else.
+    process.on("unhandledRejection", (error: unknown) => {
+      if (typeof error === "object" && error !== null && "name" in error && error.name === "AbortError") return
+      UI.error(String(error))
+    })
+
+    if (owned) {
+      UI.println(
+        UI.Style.TEXT_INFO_BOLD +
+          `Scan the QR code above to pair your phone, then press Enter to start the TUI (auto-starts in ${PAIRING_TIMEOUT_MS / 1000}s)…` +
+          UI.Style.TEXT_NORMAL,
+      )
+      await Prompt.waitForEnter(process.stdin, PAIRING_TIMEOUT_MS)
+      ClientTracker.resume()
+    }
+
+    try {
+      if (args.mini) {
+        const { runMini } = await import("./run")
+        await runMini({
+          attach: url,
+          directory,
+          password,
+          username: args.username,
+          continue: args.continue,
+          session: args.session,
+          fork: args.fork,
+          replay: noReplay ? false : undefined,
+          replayLimit: args.replayLimit,
+        })
+      } else {
+        const { TuiConfig } = await import("@/config/tui")
+        const config = await TuiConfig.get()
+        const { Effect } = await import("effect")
+        const { run } = await import("../tui/layer")
+        const { createLegacyTuiPluginHost } = await import("@/plugin/tui/runtime")
+        await Effect.runPromise(
+          run({
+            url,
+            config,
+            pluginHost: createLegacyTuiPluginHost(),
+            args: {
+              continue: args.continue,
+              sessionID: args.session,
+              fork: args.fork,
+            },
+            directory,
+            headers,
+          }),
+        )
+      }
+    } catch (error) {
+      if (owned) {
+        HostState.clear().catch(() => {})
+        process.exit(1)
+      }
+      throw error
+    }
+
+    if (!owned) return
+
+    const idleNote =
+      args.idleExit > 0
+        ? `exits ${args.idleExit}s after the last client disconnects`
+        : "stays running until you stop it with Ctrl-C"
+    if (!args.noQr) {
+      await printPairingInfo({ port, socket, password, httpsUrl, localOnly })
+    }
+    UI.println(
+      UI.Style.TEXT_DIM + `TUI detached — server still up (${ClientTracker.count()} client(s) connected), ${idleNote}.`,
+    )
+    await new Promise(() => {})
+  },
+})
+
+async function findExistingServer(input: { socket?: string; port: number }) {
+  if (input.socket) {
+    const fs = await import("fs")
+    if (fs.existsSync(input.socket)) return { socket: input.socket, port: 0 }
+    return undefined
+  }
+  if (await HostState.probe(`http://127.0.0.1:${input.port}`)) return { port: input.port }
+  return undefined
+}

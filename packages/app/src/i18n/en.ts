@@ -302,6 +302,8 @@ export const dict = {
   "prompt.menu.addImagesAndFiles": "Add files and more",
   "prompt.menu.imagesAndFiles": "Images and files",
   "prompt.menu.commands": "Commands",
+  "prompt.menu.customCommands": "Custom commands",
+  "prompt.menu.builtinCommands": "Built-in commands",
   "prompt.menu.context": "Context",
   "prompt.menu.shellCommand": "Shell command",
   "prompt.attachment.remove": "Remove attachment",

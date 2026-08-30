@@ -19,6 +19,13 @@ export interface VerificationTierConfig {
 export class VerifierPolicy {
   private workspaceRoot: string
 
+  /**
+   * Static discovery helper for a workspace path.
+   */
+  static discover(workspaceRoot: string = process.cwd()): VerificationTierConfig {
+    return new VerifierPolicy(workspaceRoot).discoverPolicy()
+  }
+
   constructor(workspaceRoot: string = process.cwd()) {
     this.workspaceRoot = path.resolve(workspaceRoot)
   }

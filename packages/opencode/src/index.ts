@@ -8,12 +8,14 @@ import { AgentCommand } from "./cli/cmd/agent"
 import { UpgradeCommand } from "./cli/cmd/upgrade"
 import { UpdateCommand } from "./cli/cmd/update"
 import { CloneCommand } from "./cli/cmd/clone"
+import { HarnessCommand } from "./cli/cmd/harness"
 import { UninstallCommand } from "./cli/cmd/uninstall"
 import { ModelsCommand } from "./cli/cmd/models"
 import { UI } from "./cli/ui"
 import { InstallationVersion } from "@opencode-ai/core/installation/version"
 import { FormatError } from "./cli/error"
 import { ServeCommand } from "./cli/cmd/serve"
+import { HostCommand } from "./cli/cmd/host"
 import { DebugCommand } from "./cli/cmd/debug"
 import { StatsCommand } from "./cli/cmd/stats"
 import { McpCommand } from "./cli/cmd/mcp"
@@ -107,8 +109,10 @@ const cli = yargs(args)
   .command(UpgradeCommand)
   .command(UpdateCommand)
   .command(CloneCommand)
+  .command(HarnessCommand)
   .command(UninstallCommand)
   .command(ServeCommand)
+  .command(HostCommand)
   .command(WebCommand)
   .command(ModelsCommand)
   .command(StatsCommand)

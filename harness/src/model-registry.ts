@@ -5,6 +5,8 @@
  * as specified in Master Design V5.2 (§27A, §33).
  */
 
+import { ModelRoiAnalyzer, type RoiPreference } from "./model-roi"
+
 export type ModelRole = "explorer" | "planner" | "implementer" | "verifier" | "debugger"
 export type ModelCostTier = "free" | "cheap" | "standard" | "premium"
 export type ModelHealthStatus = "healthy" | "rate_limited" | "unreachable" | "degraded"
@@ -25,6 +27,15 @@ export interface ModelProfile {
 
 export class ModelRegistry {
   private profiles: Map<string, ModelProfile> = new Map()
+
+  /**
+   * Creates a ModelRegistry initialized automatically via economic ROI analysis.
+   */
+  static fromAutoRoi(preference: RoiPreference = "flat_fee_first"): ModelRegistry {
+    const analysis = ModelRoiAnalyzer.analyzeAndAssign(preference)
+    const profiles = ModelRoiAnalyzer.toModelProfiles(analysis)
+    return new ModelRegistry(profiles)
+  }
 
   constructor(initialProfiles?: ModelProfile[]) {
     const defaults: ModelProfile[] = initialProfiles ?? [

@@ -42,15 +42,57 @@ export class TaskPlanner {
     }))
 
     if (workUnits.length === 0) {
-      workUnits.push({
-        id: "wu_1_impl",
-        title: "Core Implementation",
-        objective: objective,
-        writeSet: relevantFiles.length > 0 ? relevantFiles : ["src/**/*.ts"],
-        relevantFiles: relevantFiles,
-        dependencies: [],
-        status: "pending",
-      })
+      const lowerObj = objective.toLowerCase()
+      if (
+        (lowerObj.includes("schema") && lowerObj.includes("handler")) ||
+        lowerObj.includes("multi-file") ||
+        relevantFiles.length >= 3
+      ) {
+        // Multi-stage DAG decomposition for multi-file tasks
+        workUnits.push({
+          id: "wu_1_schema",
+          title: "Schema & Interface Definitions",
+          objective: "Define and update core type definitions and interfaces",
+          writeSet: relevantFiles.filter(f => f.includes("type") || f.includes("schema")).length > 0
+            ? relevantFiles.filter(f => f.includes("type") || f.includes("schema"))
+            : ["src/types.ts", "src/schema.ts"],
+          relevantFiles: relevantFiles,
+          dependencies: [],
+          status: "pending",
+        })
+        workUnits.push({
+          id: "wu_2_store",
+          title: "Storage & State Persistence",
+          objective: "Implement storage logic, state mutations, and persistence helpers",
+          writeSet: relevantFiles.filter(f => f.includes("store") || f.includes("db") || f.includes("repo")).length > 0
+            ? relevantFiles.filter(f => f.includes("store") || f.includes("db") || f.includes("repo"))
+            : ["src/store.ts"],
+          relevantFiles: relevantFiles,
+          dependencies: ["wu_1_schema"],
+          status: "pending",
+        })
+        workUnits.push({
+          id: "wu_3_handlers",
+          title: "Consumer Handlers & Verification",
+          objective: "Update consumer handlers, endpoints, and verify end-to-end suite",
+          writeSet: relevantFiles.filter(f => f.includes("handler") || f.includes("controller") || f.includes("api") || f.includes("test")).length > 0
+            ? relevantFiles.filter(f => f.includes("handler") || f.includes("controller") || f.includes("api") || f.includes("test"))
+            : ["src/handler.ts", "src/index.ts", "test/**/*.ts"],
+          relevantFiles: relevantFiles,
+          dependencies: ["wu_2_store"],
+          status: "pending",
+        })
+      } else {
+        workUnits.push({
+          id: "wu_1_impl",
+          title: "Core Implementation",
+          objective: objective,
+          writeSet: relevantFiles.length > 0 ? relevantFiles : ["src/**/*.ts"],
+          relevantFiles: relevantFiles,
+          dependencies: [],
+          status: "pending",
+        })
+      }
     }
 
     return {

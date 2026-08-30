@@ -39,4 +39,13 @@ describe("ModelRouter", () => {
     expect(res2.substituted).toBe(true)
     expect(res2.nextModel).toBe("hetzner/Qwen3.8-27B")
   })
+
+  it("selects GLM-5.3-Flash for implementer/explorer and Kimi-K2.6 for planner/debugger", () => {
+    const router = new ModelRouter()
+    expect(router.selectModelForRole("explorer")).toBe("opencode-go/glm-5.3-flash")
+    expect(router.selectModelForRole("implementer")).toBe("opencode-go/glm-5.3-flash")
+    expect(router.selectModelForRole("verifier")).toBe("opencode-go/glm-5.3-flash")
+    expect(router.selectModelForRole("planner")).toBe("opencode-go/kimi-k2.6")
+    expect(router.selectModelForRole("debugger")).toBe("opencode-go/kimi-k2.6")
+  })
 })

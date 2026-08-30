@@ -701,6 +701,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
         description: opt.description,
         keybind: opt.keybind,
         type: "builtin" as const,
+        group: language.t("prompt.menu.builtinCommands"),
       }))
 
     const custom = sync().data.command.map((cmd) => ({
@@ -709,6 +710,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
       title: cmd.name,
       description: cmd.description,
       type: "custom" as const,
+      group: language.t("prompt.menu.customCommands"),
       // source: cmd.source,
     }))
 

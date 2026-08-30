@@ -383,3 +383,15 @@ body:not([data-new-layout]) [data-component="markdown"] {
   text-decoration: underline;
   text-underline-offset: 2px;
 }
+
+[data-component="markdown-code"][data-mermaid] [data-mermaid-diagram] {
+  display: flex;
+  justify-content: center;
+  overflow: auto;
+  padding: 8px 4px;
+}
+
+[data-component="markdown-code"][data-mermaid] [data-mermaid-diagram] svg {
+  max-width: 100%;
+  height: auto;
+}

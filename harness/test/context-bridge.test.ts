@@ -30,7 +30,7 @@ describe("ContextBridge", () => {
     expect(prompt).toContain("Objective: Implement WebSocket heartbeat")
     expect(prompt).toContain("Active Hypothesis: Ping every 10s")
     expect(prompt).toContain("Timeout must be 30s")
-    expect(prompt).toContain("EXECUTION RULES:")
+    expect(prompt).toContain("EXECUTION DISCIPLINE")
   })
 
   it("builds continuation prompt with updated state and last action summary", () => {

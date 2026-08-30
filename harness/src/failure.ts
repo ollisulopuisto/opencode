@@ -105,21 +105,53 @@ export class FailureClassifier {
   }
 
   /**
-   * Format structured prompt instructions for Qwen recovery.
+   * Format structured prompt instructions for recovery with hypothesis shifting and anti-oscillation guidance.
    */
-  static buildRecoveryPrompt(diagnosis: FailureDiagnosis, taskObjective: string): string {
-    return [
+  static buildRecoveryPrompt(
+    diagnosis: FailureDiagnosis,
+    taskObjective: string,
+    options: {
+      failedHypotheses?: string[]
+      priorActions?: string[]
+      antiOscillationAdvice?: string
+    } = {}
+  ): string {
+    const lines = [
       `## RECOVERY PROTOCOL TRIGGERED`,
       `FAILURE CLASSIFICATION: ${diagnosis.type}`,
       `SUMMARY: ${diagnosis.rootCauseSummary}`,
       `ATTEMPT: ${diagnosis.attemptsOnCurrentHypothesis} / ${diagnosis.maxAttemptsAllowed}`,
       ``,
-      `MANDATORY RULES:`,
+    ]
+
+    if (diagnosis.type === "LOOP_DETECTED" || options.antiOscillationAdvice) {
+      lines.push(
+        `🚨 ANTI-OSCILLATION ENFORCEMENT:`,
+        `- An edit oscillation or repetitive tool loop was intercepted.`,
+        `- MANDATORY: You must completely abandon the previous edit approach.`,
+        `- Do not attempt variations or minor adjustments of the same syntax/pattern.`,
+        options.antiOscillationAdvice ? `- ADVICE: ${options.antiOscillationAdvice}` : "",
+        ``
+      )
+    }
+
+    if (options.failedHypotheses && options.failedHypotheses.length > 0) {
+      lines.push(
+        `PREVIOUS FAILED HYPOTHESES (DO NOT REPEAT):`,
+        ...options.failedHypotheses.map((h, i) => `  ${i + 1}. ${h}`),
+        ``
+      )
+    }
+
+    lines.push(
+      `MANDATORY RECOVERY RULES:`,
       `1. STOP: Do not repeat the exact same edit or command.`,
-      `2. DIAGNOSE: Explain why the previous hypothesis was incorrect.`,
-      `3. HYPOTHESIZE: State a new hypothesis in 1 sentence.`,
-      `4. TARGETED FIX: Make the minimal edit to satisfy the hypothesis.`,
-      `5. VERIFY: Run the test command to verify before claiming success.`,
-    ].join("\n")
+      `2. DIAGNOSE: Explicitly explain why the prior hypothesis failed.`,
+      `3. HYPOTHESIS SHIFT: Formulate an orthogonal, contrasting hypothesis.`,
+      `4. TARGETED MINIMAL EDIT: Implement only the code necessary to test the new hypothesis.`,
+      `5. VERIFY: Run the test command to verify before claiming success.`
+    )
+
+    return lines.filter(Boolean).join("\n")
   }
 }

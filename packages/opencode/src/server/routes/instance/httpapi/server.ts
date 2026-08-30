@@ -180,6 +180,8 @@ const serverRoutes = HttpApiBuilder.layer(Api).pipe(
   Layer.provide([serverHttpApiAuthLayer, v2SchemaErrorLayer]),
 )
 
+import { serveFileView } from "@/server/shared/file-view"
+
 // `OpenApi.fromApi` is non-trivial; defer until /doc is actually hit so
 // processes that never serve it (CLI, scripts) don't pay at module load.
 // `HttpServerResponse.jsonUnsafe` runs JSON.stringify eagerly, so caching
@@ -190,6 +192,12 @@ const docResponse = lazy(() => HttpServerResponse.jsonUnsafe(OpenApi.fromApi(Pub
 const docRoute = HttpRouter.use((router) => router.add("GET", "/doc", () => Effect.succeed(docResponse()))).pipe(
   Layer.provide(authOnlyRouterLayer),
 )
+
+const fileViewRoute = HttpRouter.use((router) =>
+  Effect.gen(function* () {
+    yield* router.add("GET", "/api/file", (request) => serveFileView(request))
+  }),
+).pipe(Layer.provide(authOnlyRouterLayer))
 
 const uiRoute = HttpRouter.use((router) =>
   Effect.gen(function* () {
@@ -287,6 +295,7 @@ export function createRoutes(
     instanceRoutes,
     serverRoutes,
     docRoute,
+    fileViewRoute,
     uiRoute,
   ).pipe(
     Layer.provide([

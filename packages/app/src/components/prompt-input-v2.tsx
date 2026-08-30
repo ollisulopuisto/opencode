@@ -296,6 +296,7 @@ export function usePromptInputV2Controller(props: PromptInputV2ControllerProps):
       title: item.name,
       description: item.description,
       type: "custom" as const,
+      group: language.t("prompt.menu.customCommands"),
     })),
     ...command.options
       .filter((item) => !item.disabled && !item.id.startsWith("suggested.") && item.slash)
@@ -305,6 +306,7 @@ export function usePromptInputV2Controller(props: PromptInputV2ControllerProps):
         title: item.title,
         description: item.description,
         type: "builtin" as const,
+        group: language.t("prompt.menu.builtinCommands"),
       })),
   ])
   const commands = createMemo<PromptInputV2Suggestion[]>(() =>
@@ -316,6 +318,7 @@ export function usePromptInputV2Controller(props: PromptInputV2ControllerProps):
       title: item.title,
       description: item.description,
       keybind: command.keybindParts(item.id),
+      group: item.group,
     })),
   )
   const variants = createMemo(() => ["default", ...props.controls.model.selection.variant.list()])

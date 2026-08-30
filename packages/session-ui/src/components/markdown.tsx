@@ -30,6 +30,9 @@ import {
 } from "./markdown-worker"
 import { markdownBlockKey, type MarkdownToken } from "./markdown-worker-protocol"
 import { shouldResetCodeTokens, type RenderedCodeState } from "./markdown-code-state"
+import { renderMermaidSvg } from "./mermaid"
+import { attachMermaidZoom } from "./mermaid-zoom"
+import { canFastAppend, isPlainText, textDelta } from "./markdown-text-tail"
 import { getCachedMarkdown, sanitizeMarkdown, touchCachedMarkdown, type MarkdownCacheEntry } from "./markdown-cache"
 import { inlineCodeKind } from "./markdown-inline-code-kind"
 
@@ -586,6 +589,25 @@ function disposeCode(key: string) {
   disposeStreamingCode(key)
 }
 
+const textTails = new WeakMap<HTMLDivElement, { key: string; raw: string }>()
+
+// Appends a plain-text delta to the streaming tail instead of re-morphing the
+// whole block, so text selections survive while a message streams. Only
+// proceeds when the live DOM provably mirrors the previous raw (last element
+// is a paragraph whose text equals it), otherwise reports failure and lets
+// the morphdom path run.
+function fastAppendTextTail(wrapper: HTMLDivElement, block: Extract<RenderedBlock, { mode: Exclude<Block["mode"], "code"> }>): boolean {
+  const state = textTails.get(wrapper)
+  if (!state || state.key !== block.key) return false
+  if (!canFastAppend(state.raw, block.raw)) return false
+  const last = wrapper.lastElementChild
+  if (!(last instanceof HTMLParagraphElement) || last.textContent !== state.raw) return false
+  last.append(textDelta(state.raw, block.raw))
+  wrapper.dataset.markdownHash = block.hash
+  textTails.set(wrapper, { key: block.key, raw: block.raw })
+  return true
+}
+
 function updateBlock(container: HTMLDivElement, index: number, block: RenderedBlock, labels: CopyLabels) {
   const current = container.children[index]
   if (block.mode === "code") {
@@ -598,6 +620,8 @@ function updateBlock(container: HTMLDivElement, index: number, block: RenderedBl
     current.dataset.markdownHash === block.hash
   )
     return
+
+  if (current instanceof HTMLDivElement && fastAppendTextTail(current, block)) return
 
   const next = document.createElement("div")
   next.dataset.markdownBlock = ""
@@ -630,6 +654,10 @@ function updateBlock(container: HTMLDivElement, index: number, block: RenderedBl
       return true
     },
   })
+
+  const settled = current instanceof HTMLDivElement ? current : next
+  if (isPlainText(block.raw)) textTails.set(settled, { key: block.key, raw: block.raw })
+  else textTails.delete(settled)
 }
 
 function updateCodeBlock(
@@ -639,6 +667,12 @@ function updateCodeBlock(
   labels: CopyLabels,
 ) {
   const existing = current instanceof HTMLDivElement && current.dataset.markdownKey === block.key ? current : undefined
+
+  if (block.language === "mermaid" && block.complete) {
+    updateMermaidBlock(container, existing, current, block, labels)
+    return
+  }
+
   const next = existing ?? document.createElement("div")
   next.dataset.markdownBlock = ""
   next.dataset.markdownKey = block.key
@@ -703,6 +737,76 @@ function updateCodeBlock(
     return
   }
   container.appendChild(next)
+}
+
+function mermaidSource(block: Extract<RenderedBlock, { mode: "code" }>) {
+  return [...block.stable, ...block.unstable].map((token) => token[0]).join("")
+}
+
+// A complete ```mermaid block renders as a diagram with pinch zoom. The
+// source code stays in the DOM as the copy target and as the fallback when
+// mermaid rejects the diagram. Rendered diagrams are stable: the hash guard
+// above keeps streaming morphs from touching them.
+function updateMermaidBlock(
+  container: HTMLDivElement,
+  existing: HTMLDivElement | undefined,
+  current: Element | undefined,
+  block: Extract<RenderedBlock, { mode: "code" }>,
+  labels: CopyLabels,
+) {
+  if (existing?.dataset.mermaidHash === block.hash) return
+
+  const next = existing ?? document.createElement("div")
+  next.dataset.markdownBlock = ""
+  next.dataset.markdownKey = block.key
+  next.dataset.markdownHash = block.hash
+  next.dataset.markdownComplete = "true"
+  next.dataset.mermaidHash = block.hash
+  next.style.display = "contents"
+
+  let wrapper = existing?.querySelector<HTMLElement>('[data-component="markdown-code"]')
+  if (!wrapper) {
+    wrapper = document.createElement("div")
+    wrapper.setAttribute("data-component", "markdown-code")
+    applyCodeMetadata(wrapper, block.language)
+    const pre = document.createElement("pre")
+    pre.className = "shiki OpenCode"
+    const codeElement = document.createElement("code")
+    codeElement.className = "language-mermaid"
+    codeElement.textContent = mermaidSource(block)
+    pre.appendChild(codeElement)
+    wrapper.appendChild(pre)
+  }
+  wrapper.dataset.mermaid = ""
+  wrapper.dataset.mermaidStatus = "pending"
+
+  const diagram = document.createElement("div")
+  diagram.dataset.mermaidDiagram = ""
+  wrapper.appendChild(diagram)
+  if (!wrapper.querySelector('[data-slot="markdown-copy-button"]')) wrapper.appendChild(createCopyButton(labels))
+
+  if (!next.contains(wrapper)) next.appendChild(wrapper)
+  if (!current) {
+    container.appendChild(next)
+  } else if (current !== next) {
+    disposeCopyButtons(current)
+    current.replaceWith(next)
+  }
+
+  const pre = wrapper.querySelector("pre")
+  void renderMermaidSvg(mermaidSource(block))
+    .then((svg) => {
+      if (!diagram.isConnected) return
+      diagram.innerHTML = svg
+      if (pre instanceof HTMLElement) pre.hidden = true
+      wrapper!.dataset.mermaidStatus = "done"
+      attachMermaidZoom(diagram)
+    })
+    .catch(() => {
+      if (!wrapper!.isConnected) return
+      wrapper!.dataset.mermaidStatus = "failed"
+      diagram.remove()
+    })
 }
 
 function sameToken(left: MarkdownToken, right: MarkdownToken | undefined) {

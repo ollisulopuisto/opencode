@@ -65,6 +65,32 @@ export class ModelRouter {
   }
 
   /**
+   * Selects the optimal available model from the pool for a specific harness lane/role.
+   */
+  selectModelForRole(role: "explorer" | "planner" | "implementer" | "verifier" | "debugger", exclude: string[] = []): string {
+    const excludedSet = new Set([...exclude, ...this.unavailableModels])
+
+    // Specific role prioritization:
+    // • Explorer / Implementer / Verifier: GLM 5.3 Flash (high throughput, 2x usage) -> Qwen 3.8 Max -> Hetzner -> Kimi
+    // • Planner / Debugger: Kimi K2.6 (200k context, thinking) -> Qwen 3.8 Max -> GLM 5.3 Flash -> Hetzner
+    let prioritizedIds: string[] = []
+    if (role === "planner" || role === "debugger") {
+      prioritizedIds = ["opencode-go/kimi-k2.6", "opencode-go/qwen3.8-max", "opencode-go/glm-5.3-flash", "hetzner/Qwen3.8-27B"]
+    } else {
+      prioritizedIds = ["opencode-go/glm-5.3-flash", "opencode-go/kimi-k2.6", "opencode-go/qwen3.8-max", "hetzner/Qwen3.8-27B"]
+    }
+
+    for (const id of prioritizedIds) {
+      const candidate = this.pool.find((m) => m.id === id && m.enabled && !excludedSet.has(m.id))
+      if (candidate) {
+        return candidate.id
+      }
+    }
+
+    return this.selectModel(exclude)
+  }
+
+  /**
    * Selects the highest-priority available model from the pool.
    */
   selectModel(exclude: string[] = []): string {
