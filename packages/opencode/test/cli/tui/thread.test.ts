@@ -51,6 +51,24 @@ describe("tui thread", () => {
     expect(resolveThreadDirectory(undefined, pwd.path, cwd.path)).toBe(cwd.path)
   })
 
+  test("ignores OLDPWD and uses current directory when project is dot or undefined", async () => {
+    await using oldDir = await tmpdir({ git: true })
+    await using currentDir = await tmpdir({ git: true })
+
+    const prevOld = process.env.OLDPWD
+    const prevPwd = process.env.PWD
+    try {
+      process.env.OLDPWD = oldDir.path
+      process.env.PWD = currentDir.path
+      expect(resolveThreadDirectory(".")).toBe(currentDir.path)
+    } finally {
+      if (prevOld !== undefined) process.env.OLDPWD = prevOld
+      else delete process.env.OLDPWD
+      if (prevPwd !== undefined) process.env.PWD = prevPwd
+      else delete process.env.PWD
+    }
+  })
+
   test("parses supported --no-replay forms", async () => {
     for (const option of ["--no-replay", "--no-replay=true", "--noReplay"]) {
       const args = await yargs([])

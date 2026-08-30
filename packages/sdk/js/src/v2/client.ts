@@ -11,6 +11,7 @@ function pick(value: string | null, fallback?: string, encode?: (value: string) 
   if (!value) return
   if (!fallback) return value
   if (value === fallback) return fallback
+  if (value === encodeURIComponent(fallback)) return fallback
   if (encode && value === encode(fallback)) return fallback
   return value
 }

@@ -25,8 +25,8 @@ export class LoopDetector {
   private readonly maxIdenticalFailures: number
 
   constructor(options: { readonly maxIdenticalCalls?: number; readonly maxIdenticalFailures?: number } = {}) {
-    this.maxIdenticalCalls = options.maxIdenticalCalls ?? 2
-    this.maxIdenticalFailures = options.maxIdenticalFailures ?? 2
+    this.maxIdenticalCalls = options.maxIdenticalCalls ?? 3
+    this.maxIdenticalFailures = options.maxIdenticalFailures ?? 3
   }
 
   record(event: ToolCallEvent): LoopDetectionResult {
@@ -53,17 +53,20 @@ export class LoopDetector {
           loopType: "REPEATED_FAILURE",
           pattern: `Error repeated ${count} times: ${errSig.slice(0, 100)}`,
           count,
-          recommendedAction: count >= 3 ? "ESCALATE_SUPERVISOR" : "HALT_AND_RECOVER",
+          recommendedAction: count >= 4 ? "ESCALATE_SUPERVISOR" : "HALT_AND_RECOVER",
         }
       }
     }
 
     // Check 2: Consecutive identical tool calls
+    const isReadOnly = ["read", "grep", "glob", "websearch", "question"].includes(event.tool)
+    const threshold = isReadOnly ? Math.max(this.maxIdenticalCalls + 2, 5) : this.maxIdenticalCalls
+
     const callSignature = this.hashCall(event.tool, event.args)
-    const recent = this.history.slice(-(this.maxIdenticalCalls + 1))
+    const recent = this.history.slice(-(threshold + 1))
     const matchingRecent = recent.filter((e) => this.hashCall(e.tool, e.args) === callSignature)
 
-    if (matchingRecent.length > this.maxIdenticalCalls) {
+    if (matchingRecent.length > threshold) {
       return {
         loopDetected: true,
         loopType: "REPEATED_TOOL_CALL",

@@ -36,7 +36,9 @@ export function useDirectoryPicker() {
     const cancel = () => {
       if (!selected) input.onSelect(null)
     }
-    if (platform.platform === "desktop" && settings.general.newLayoutDesigns()) {
+    // The tree browser is not desktop-specific: the PWA gets it too, and the
+    // legacy search-only dialog stays for the old layout designs.
+    if (settings.general.newLayoutDesigns()) {
       dialog.show(() => <DialogSelectDirectoryV2 {...input} onSelect={onSelect} />, cancel)
       return
     }

@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Calendar Versioning](https://calver.org/) (`vYY.MM.DD.N`).
 
+## [v26.08.31.15662] - 2026-08-31
+
+### Fixed
+- **Host TUI Terminal Noise Suppression**: Safely suppressed unhandled promise rejections on the hosting server process during interactive TUI execution in `opencode host`, preventing ANSI error output from leaking to stderr and corrupting the terminal prompt textarea.
+- **Host Command Harness Option Forwarding**: Forwarded `--harness` CLI argument from `opencode host` into the interactive and mini session options.
+
+## [v26.08.30.15661] - 2026-08-30
+
+### Added
+- **Native Harness UI & TUI Presentation Integration** (`HARNESS_V6_MASTER_PLAN.md`):
+  - Core UI presentation engine (`@opencode-ai/core/harness/ui-presenter.ts`) with deterministic gate status formatting, DAG work-unit progress calculation, change budget enforcement, and conventional CalVer commit drafting.
+  - TUI Harness widgets (`packages/tui/src/component/harness/`): `HarnessPanel` sidebar widget, `HarnessBadge` footer status indicator, and `DialogHarness` modal inspection view.
+  - `/harness` slash command registered in OpenCode TUI command palette for instant governance inspection.
+  - Web GUI & PWA Inspector panel (`packages/app/src/components/harness-inspector-panel.tsx`) featuring expandable test failure diagnostic callouts, change budget meters, and one-click conventional commit actions.
+- **Master Plan & AGY Control Directives** (`HARNESS_V6_MASTER_PLAN.md`): Documented phased roadmap, keybinding directives (`/harness`, `Ctrl+H`, `Ctrl+E`), and Red-Green TDD verification standards.
+
+### Fixed
+- **Mobile PWA Double-Encoding Bug**: Resolved query parameter double encoding in `packages/sdk/js/src/v2/client.ts` and `packages/server/src/location.ts` that caused 500 crashes and `FileSystem.realPath` lookup failures on remote PWA clients.
+- **Reasoning Model Loop Sensitivity**: Added per-turn loop detector reset and increased read-only inspection tolerance to prevent false-positive Step-2 aborts on long-thinking reasoning models.
+- **Monorepo Test Guard Compatibility**: Updated `VerifierPolicy` to execute package-scoped test runs (`bun test --cwd packages/opencode`) avoiding root guard blocks.
+
 ## [v26.08.30.15638] - 2026-08-30
 
 ### Fixed

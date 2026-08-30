@@ -1,8 +1,11 @@
-import { createMemo, Match, onCleanup, onMount, Show, Switch } from "solid-js"
+import { createMemo, createResource, Match, onCleanup, onMount, Show, Switch } from "solid-js"
 import { useTheme } from "../../context/theme"
 import { useSync } from "../../context/sync"
 import { useDirectory } from "../../context/directory"
 import { useConnected } from "../../component/use-connected"
+import { HarnessBadge } from "../../component/harness/harness-badge"
+import type { TaskState } from "@opencode-ai/core/harness/state"
+import path from "path"
 import { createStore } from "solid-js/store"
 import { useRoute } from "../../context/route"
 
@@ -19,6 +22,16 @@ export function Footer() {
   })
   const directory = useDirectory()
   const connected = useConnected()
+
+  const [taskState] = createResource(directory, async (dir) => {
+    try {
+      const file = Bun.file(path.join(dir, ".opencode", "task-state.json"))
+      if (await file.exists()) {
+        return (await file.json()) as TaskState
+      }
+    } catch {}
+    return undefined
+  })
 
   const [store, setStore] = createStore({
     welcome: false,
@@ -82,6 +95,7 @@ export function Footer() {
                 {mcp()} MCP
               </text>
             </Show>
+            <HarnessBadge state={taskState()} />
             <text fg={theme.textMuted}>/status</text>
           </Match>
         </Switch>

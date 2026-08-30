@@ -87,9 +87,12 @@ export class GitLifecycleEngine {
     if (filesChanged.every((f) => f.startsWith("harness/"))) return "harness"
     if (filesChanged.every((f) => f.startsWith("packages/opencode/"))) return "opencode"
     if (filesChanged.every((f) => f.startsWith("packages/core/"))) return "core"
+    if (filesChanged.every((f) => f.startsWith("packages/app/"))) return "app"
+    if (filesChanged.every((f) => f.startsWith("packages/desktop/"))) return "desktop"
     if (filesChanged.every((f) => f.startsWith("packages/server/"))) return "server"
     if (filesChanged.every((f) => f.startsWith("packages/tui/"))) return "tui"
     if (filesChanged.every((f) => f.startsWith("packages/sdk/"))) return "sdk"
+    if (filesChanged.every((f) => f.startsWith("packages/ui/"))) return "ui"
     return undefined
   }
 

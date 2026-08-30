@@ -202,11 +202,21 @@ export function detectDesktopNativeLocale(languages: readonly string[]): Desktop
     if (["no", "nb", "nn"].includes(source.language)) return "no"
     const match = DESKTOP_NATIVE_LOCALES.find((candidate) => {
       const target = locale(DESKTOP_NATIVE_LOCALE_TAGS[candidate])
-      return target?.language === source.language && target.script === source.script
+      return target?.language === source.language && sameScript(target.script, source.script)
     })
     if (match) return match
   }
   return "en"
+}
+
+// ICU maximization emits `Aran` (the ISO 15924 Nastaliq variant) for pa-PK
+// while the bundle tag uses `Arab`; they name the same script class. Without
+// the alias a pa-PK user falls back to English instead of the pa bundle.
+const scriptAliases: Record<string, string> = { Aran: "Arab" }
+
+function sameScript(a: string | undefined, b: string | undefined) {
+  if (!a || !b) return false
+  return (scriptAliases[a] ?? a) === (scriptAliases[b] ?? b)
 }
 
 export function desktopNativePluralCategories(locale: DesktopNativeLocale) {

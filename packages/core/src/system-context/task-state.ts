@@ -68,7 +68,11 @@ export const TaskStatePayload = Schema.Struct({
 })
 export type TaskStatePayload = typeof TaskStatePayload.Type
 
-export function renderTaskStateBaseline(state: TaskStatePayload): string {
+export const TaskStateOptional = Schema.Union([TaskStatePayload, Schema.Undefined])
+export type TaskStateOptional = typeof TaskStateOptional.Type
+
+export function renderTaskStateBaseline(state: TaskStateOptional): string {
+  if (!state) return "Task state: idle (no active autonomous task)."
   const lines: string[] = [
     "<task_state>",
     `  Task ID: ${state.taskId}`,
@@ -113,7 +117,15 @@ export function renderTaskStateBaseline(state: TaskStatePayload): string {
   return lines.join("\n")
 }
 
-export function renderTaskStateUpdate(previous: TaskStatePayload, current: TaskStatePayload): string {
+export function renderTaskStateUpdate(previous: TaskStateOptional, current: TaskStateOptional): string {
+  if (!previous && current) {
+    return ["Active engineering task state initialized:", renderTaskStateBaseline(current)].join("\n")
+  }
+  if (previous && !current) {
+    return "Active engineering task state has concluded."
+  }
+  if (!previous || !current) return "Task state: idle."
+
   const lines: string[] = [
     "<task_state_update>",
     `  State: ${previous.currentState} ➔ ${current.currentState}`,
@@ -142,15 +154,16 @@ export function renderTaskStateUpdate(previous: TaskStatePayload, current: TaskS
 }
 
 export function makeTaskStateContext(
-  loadEffect: Effect.Effect<TaskStatePayload | SystemContext.Unavailable>,
+  loadEffect: Effect.Effect<TaskStateOptional | SystemContext.Unavailable>,
 ): SystemContext.SystemContext {
   return SystemContext.make({
     key: SystemContext.Key.make("harness/task-state"),
-    codec: Schema.toCodecJson(TaskStatePayload),
+    codec: Schema.toCodecJson(TaskStateOptional),
     load: loadEffect,
     baseline: (current) =>
-      ["Current structured engineering task state:", renderTaskStateBaseline(current)].join("\n"),
-    update: (previous, current) =>
-      ["Engineering task state has updated:", renderTaskStateUpdate(previous, current)].join("\n"),
+      current
+        ? ["Current structured engineering task state:", renderTaskStateBaseline(current)].join("\n")
+        : "Task state: idle (no active autonomous task).",
+    update: (previous, current) => renderTaskStateUpdate(previous, current),
   })
 }

@@ -65,7 +65,7 @@ export class VerifierPolicy {
       }
       if (isBun) {
         tier1TargetedTestTemplate = (testFiles) => (testFiles.length > 0 ? `bun test ${testFiles.join(" ")}` : undefined)
-        tier2RegressionCmds.push(isMonorepo ? "bun test packages/opencode/test harness/test" : "bun test")
+        tier2RegressionCmds.push(isMonorepo ? "bun test --cwd packages/opencode && bun test --cwd harness" : "bun test")
       } else {
         tier1TargetedTestTemplate = (testFiles) => (testFiles.length > 0 ? `npm test -- ${testFiles.join(" ")}` : undefined)
         tier2RegressionCmds.push("npm test")

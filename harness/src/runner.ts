@@ -366,6 +366,7 @@ export class OpenCodeHarnessRunner {
     let capturedSessionId: string | undefined = sessionId
     let interruptedByLoop = false
     let stepCount = 0
+    this.loopDetector.reset()
 
     // Stream stderr asynchronously to capture error diagnostics
     const stderrReader = (proc.stderr as ReadableStream<Uint8Array>).getReader()

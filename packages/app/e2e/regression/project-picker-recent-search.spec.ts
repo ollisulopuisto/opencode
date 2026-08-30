@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test"
 import type { Page } from "@playwright/test"
+import appPackage from "../../package.json" with { type: "json" }
 import { fixture, pageMessages } from "../smoke/session-timeline.fixture"
 import { mockOpenCodeServer } from "../utils/mock-server"
 import { expectAppVisible } from "../utils/waits"
@@ -26,7 +27,13 @@ async function openProjectDialog(page: Page) {
     fileList: () => [],
     findFiles: () => [],
   })
-  await page.addInitScript((dirs) => {
+  await page.addInitScript(({ dirs, version }) => {
+    // The recent-projects list is a legacy-dialog feature: the tree-browser
+    // dialog covers the default layout, so pin the old layout to test this one.
+    // Marking the launch version as current keeps the upgrade migration from
+    // flipping newLayoutDesigns back on.
+    localStorage.setItem("app-version.v1", JSON.stringify({ version }))
+    localStorage.setItem("settings.v3", JSON.stringify({ general: { newLayoutDesigns: false } }))
     localStorage.setItem(
       "opencode.global.dat:server",
       JSON.stringify({
@@ -34,9 +41,9 @@ async function openProjectDialog(page: Page) {
         lastProject: {},
       }),
     )
-  }, worktrees)
+  }, { dirs: worktrees, version: appPackage.version })
   await page.goto("/")
-  const add = page.getByRole("button", { name: "Add project" }).first()
+  const add = page.getByRole("button", { name: "Open project" }).first()
   await expectAppVisible(add)
   await add.click()
   await expect(rows(page)).toHaveCount(5)

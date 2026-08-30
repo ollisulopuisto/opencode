@@ -1,10 +1,14 @@
 import { useProject } from "../../context/project"
 import { useSync } from "../../context/sync"
-import { createMemo, Show } from "solid-js"
+import { createEffect, createMemo, createSignal, Show } from "solid-js"
 import { useTheme } from "../../context/theme"
 import { useTuiConfig } from "../../config"
 import { InstallationChannel, InstallationVersion } from "@opencode-ai/core/installation/version"
 import { usePluginRuntime } from "../../plugin/runtime"
+import { HarnessPanel } from "../../component/harness/harness-panel"
+import { useTuiPaths } from "../../context/runtime"
+import type { TaskState } from "@opencode-ai/core/harness/state"
+import path from "path"
 
 import { getScrollAcceleration } from "../../util/scroll"
 import { WorkspaceLabel } from "../../component/workspace-label"
@@ -15,6 +19,28 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
   const sync = useSync()
   const { theme } = useTheme()
   const tuiConfig = useTuiConfig()
+  const paths = useTuiPaths()
+  const dirPath = () => project.instance.directory() || paths.cwd
+
+  const [taskState, setTaskState] = createSignal<TaskState | undefined>()
+  createEffect(() => {
+    const dir = dirPath()
+    if (!dir) {
+      setTaskState(undefined)
+      return
+    }
+    void (async () => {
+      try {
+        const file = Bun.file(path.join(dir, ".opencode", "task-state.json"))
+        if (await file.exists()) {
+          setTaskState((await file.json()) as TaskState)
+          return
+        }
+      } catch {}
+      setTaskState(undefined)
+    })()
+  })
+
   const session = createMemo(() => sync.session.get(props.sessionID))
   const workspace = () => {
     const workspaceID = session()?.workspaceID
@@ -82,6 +108,13 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                 </Show>
               </box>
             </pluginRuntime.Slot>
+            <Show when={taskState()}>
+              {(state) => (
+                <box flexDirection="column" paddingTop={1}>
+                  <HarnessPanel state={state()} />
+                </box>
+              )}
+            </Show>
             <pluginRuntime.Slot name="sidebar_content" session_id={props.sessionID} />
           </box>
         </scrollbox>

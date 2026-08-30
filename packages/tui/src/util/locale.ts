@@ -27,6 +27,15 @@ export function todayTimeOrDateTime(input: number): string {
   }
 }
 
+export function timestamp(input: number): string {
+  if (Number.isNaN(input)) return ""
+  const date = new Date(input)
+  const pad = (n: number) => String(n).padStart(2, "0")
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(
+    date.getMinutes(),
+  )}:${pad(date.getSeconds())}`
+}
+
 export function number(num: number): string {
   if (num >= 1000000) {
     return (num / 1000000).toFixed(1) + "M"

@@ -203,15 +203,38 @@ export class TaskStateMachine {
     }
   }
 
-  recordFailure(failure: Omit<FailureRecord, "timestamp" | "recovered">): void {
-    const record: FailureRecord = {
-      ...failure,
-      timestamp: Date.now(),
-      recovered: false,
-    }
+  recordFailure(
+    failureOrType: Omit<FailureRecord, "timestamp" | "recovered"> | string,
+    message?: string,
+    step?: number,
+    context?: string,
+  ): void {
+    const record: FailureRecord =
+      typeof failureOrType === "string"
+        ? {
+            id: `fail_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+            type: failureOrType,
+            message: message ?? "Unknown failure",
+            step: step ?? 0,
+            context,
+            timestamp: Date.now(),
+            recovered: false,
+          }
+        : {
+            ...failureOrType,
+            timestamp: Date.now(),
+            recovered: false,
+          }
     this.state = {
       ...this.state,
       failures: [...this.state.failures, record],
+    }
+  }
+
+  recordDecision(decision: string): void {
+    this.state = {
+      ...this.state,
+      decisions: [...this.state.decisions, decision],
     }
   }
 
@@ -220,6 +243,10 @@ export class TaskStateMachine {
       ...this.state,
       failures: this.state.failures.map((f) => (f.id === failureId ? { ...f, recovered: true } : f)),
     }
+  }
+
+  setPlan(units: readonly WorkUnit[]): void {
+    this.setWorkUnits(units)
   }
 
   setWorkUnits(units: readonly WorkUnit[]): void {

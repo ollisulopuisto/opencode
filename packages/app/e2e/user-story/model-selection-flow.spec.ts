@@ -72,7 +72,10 @@ test("creates a session in a new project, connects OpenCode Go, and selects its 
   const addProject = page.locator('[data-action="home-add-project-row"]')
   await expectAppVisible(addProject)
   await addProject.click()
-  await page.locator("[data-directory-path]").click()
+  // The default-layout picker is the tree browser: pick the folder in the tree
+  // and confirm the selection.
+  await page.getByRole("treeitem", { name: "NewProject" }).click()
+  await page.getByRole("button", { name: "Select folder" }).click()
 
   await page.locator('[data-action="home-new-session"]').click()
   await expectAppVisible(page.locator('[data-component="prompt-input-v2"]'))

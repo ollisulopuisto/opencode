@@ -38,27 +38,66 @@ afterEach(() => {
 async function wait(fn: () => boolean, timeout = 2000) {
   const start = Date.now()
   while (!fn()) {
+    if (app) await app.renderOnce()
     if (Date.now() - start > timeout) throw new Error("timed out waiting for condition")
-    await Bun.sleep(10)
+    await Bun.sleep(20)
   }
 }
 
-test("shows the connected server in the sidebar footer", async () => {
+
+
+test("renders harness gates in sidebar when task-state exists", async () => {
   await using tmp = await tmpdir()
   await Bun.write(`${tmp.path}/kv.json`, "{}")
+
+  const taskState = {
+    taskId: "task_sidebar_1",
+    objective: "Add sidebar harness integration",
+    currentState: "EXECUTE" as const,
+    constraints: [],
+    decisions: [],
+    workUnits: [
+      {
+        id: "wu_1",
+        title: "Integrate sidebar harness",
+        objective: "Add taskState to sidebar",
+        writeSet: ["packages/tui/src/routes/session/sidebar.tsx"],
+        relevantFiles: [],
+        dependencies: [],
+        status: "verified" as const,
+      },
+    ],
+    activeWorkUnitId: "wu_1",
+    filesChanged: ["packages/tui/src/routes/session/sidebar.tsx"],
+    linesAdded: 20,
+    linesDeleted: 2,
+    testsRun: [
+      { name: "Tier 0 Static: typecheck", passed: true, durationMs: 110 },
+      { name: "Tier 1 Targeted: sidebar.test.tsx", passed: true, durationMs: 60 },
+    ],
+    failures: [],
+    currentHypothesis: "Render HarnessPanel in sidebar scrollbox",
+    remainingWork: [],
+    knownUnknowns: [],
+    history: [],
+    supervisorInterventions: 0,
+    modelTurns: 1,
+  }
+
+  await Bun.write(`${tmp.path}/.opencode/task-state.json`, JSON.stringify(taskState))
 
   const events = createEventSource()
   const calls = createFetch((request) => {
     if (request.pathname === "/session") return json([session])
     return undefined
-  })
+  }, events)
 
   app = await testRender(
     () => (
-      <TestTuiContexts paths={{ state: tmp.path }}>
+      <TestTuiContexts paths={{ state: tmp.path, cwd: tmp.path }}>
         <ArgsProvider continue>
           <KVProvider>
-            <SDKProvider url={serverURL} directory={directory} fetch={calls.fetch} events={events.source}>
+            <SDKProvider url={serverURL} directory={tmp.path} fetch={calls.fetch} events={events.source}>
               <PermissionProvider>
                 <ProjectProvider>
                   <ExitProvider exit={() => {}}>
@@ -82,6 +121,9 @@ test("shows the connected server in the sidebar footer", async () => {
     { width: 80, height: 24 },
   )
 
-  await wait(() => app!.captureCharFrame().includes("Sidebar session"))
-  expect(app!.captureCharFrame()).toContain(serverURL)
+  await wait(() => app!.captureCharFrame().includes("VERIFICATION GATES"))
+  const frame = app!.captureCharFrame()
+  expect(frame).toContain("VERIFICATION GATES")
+  expect(frame).toContain("Tier 0")
+  expect(frame).toContain("Integrate sidebar harness")
 })

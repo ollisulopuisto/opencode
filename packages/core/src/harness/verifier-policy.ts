@@ -56,8 +56,11 @@ export class VerifierPolicy {
         tier0StaticCmds.push("tsc --noEmit")
       }
       if (isBun) {
-        tier1TargetedTestTemplate = (testFiles) => (testFiles.length > 0 ? `bun test ${testFiles.join(" ")}` : undefined)
-        tier2RegressionCmds.push(isMonorepo ? "bun test packages/opencode/test harness/test" : "bun test")
+        tier1TargetedTestTemplate = (testFiles) =>
+          testFiles.length > 0 ? `bun test ${testFiles.join(" ")}` : undefined
+        tier2RegressionCmds.push(
+          isMonorepo ? "bun test --cwd packages/opencode && bun test --cwd harness" : "bun test",
+        )
       } else {
         tier1TargetedTestTemplate = (testFiles) =>
           testFiles.length > 0 ? `npm test -- ${testFiles.join(" ")}` : undefined

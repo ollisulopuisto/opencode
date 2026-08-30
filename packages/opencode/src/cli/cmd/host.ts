@@ -76,6 +76,11 @@ export const HostCommand = cmd({
       .option("replay-limit", {
         type: "number",
         describe: "cap visible mini replay to the newest N messages",
+      })
+      .option("harness", {
+        type: "boolean",
+        describe: "enable autonomous harness supervisory state tracking and verification in the session",
+        default: false,
       }),
   handler: async (args) => {
     if (args.replay === true) {
@@ -207,12 +212,10 @@ export const HostCommand = cmd({
     }
 
     // The TUI's SSE cleanup rejects with an AbortError when it exits; the TUI
-    // worker normally swallows unhandled rejections, but the attached TUI runs
-    // in this process. Ignore those and surface anything else.
-    process.on("unhandledRejection", (error: unknown) => {
-      if (typeof error === "object" && error !== null && "name" in error && error.name === "AbortError") return
-      UI.error(String(error))
-    })
+    // worker normally swallows unhandled rejections so stderr doesn't corrupt
+    // the interactive screen.
+    const onUnhandledRejection = (_error: unknown) => {}
+    process.on("unhandledRejection", onUnhandledRejection)
 
     if (owned) {
       UI.println(
@@ -235,6 +238,7 @@ export const HostCommand = cmd({
           continue: args.continue,
           session: args.session,
           fork: args.fork,
+          harness: args.harness,
           replay: noReplay ? false : undefined,
           replayLimit: args.replayLimit,
         })

@@ -45,6 +45,7 @@ export type PromptInputV2Props = {
   variantControlVisible?: boolean
   attachKeybind?: string[]
   attachShortcut?: string
+  dictationControl?: JSX.Element
 }
 
 export function PromptInputV2(props: PromptInputV2Props) {
@@ -254,6 +255,7 @@ export function PromptInputV2(props: PromptInputV2Props) {
                 </Show>
               )}
             </Show>
+            <Show when={props.dictationControl}>{props.dictationControl}</Show>
           </div>
           <PromptInputV2SubmitButton
             mode={state.mode}
@@ -562,6 +564,7 @@ export function PromptInputV2Select(props: {
   return (
     <TooltipV2
       placement="top"
+      class="min-w-0"
       value={
         <>
           {props.title}
@@ -574,7 +577,7 @@ export function PromptInputV2Select(props: {
           as={ButtonV2}
           variant="ghost-muted"
           size="normal"
-          class={`max-w-[220px] justify-start ![font-weight:440] ${props.class ?? ""}`}
+          class={`min-w-0 max-w-[220px] justify-start ![font-weight:440] ${props.class ?? ""}`}
           aria-label={props.title}
         >
           {props.currentIcon}

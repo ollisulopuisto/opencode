@@ -171,6 +171,11 @@ export const RunCommand = effectCmd({
         type: "string",
         describe: "agent to use",
       })
+      .option("harness", {
+        type: "boolean",
+        describe: "enable autonomous harness supervisory state tracking and verification in the session",
+        default: false,
+      })
       .option("format", {
         type: "string",
         choices: ["default", "json"],
@@ -977,6 +982,7 @@ type MiniCommandInput = {
   replay?: boolean
   replayLimit?: number
   demo?: boolean
+  harness?: boolean
 }
 
 export async function runMini(input: MiniCommandInput) {
@@ -1003,6 +1009,7 @@ export async function runMini(input: MiniCommandInput) {
     variant: undefined,
     thinking: undefined,
     mini: true,
+    harness: input.harness ?? false,
     interactive: false,
     replay: input.replay ?? true,
     "replay-limit": input.replayLimit,

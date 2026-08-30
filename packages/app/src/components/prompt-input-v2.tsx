@@ -6,7 +6,7 @@ import { Icon } from "@opencode-ai/ui/v2/icon"
 import { KeybindV2 } from "@opencode-ai/ui/v2/keybind-v2"
 import { TooltipV2 } from "@opencode-ai/ui/v2/tooltip-v2"
 import type { ReferenceInfo } from "@opencode-ai/sdk/v2/client"
-import { createEffect, createMemo, on, Show } from "solid-js"
+import { createEffect, createMemo, on, onCleanup, createSignal, Show } from "solid-js"
 import { ModelSelectorPopoverV2 } from "@/components/dialog-select-model"
 import { DialogSelectModelUnpaidV2 } from "@/components/dialog-select-model-unpaid-v2"
 import type { PromptInputProps } from "@/components/prompt-input/contracts"
@@ -20,12 +20,14 @@ import { useCommand } from "@/context/command"
 import { useLanguage } from "@/context/language"
 import { useLayout } from "@/context/layout"
 import { usePermission } from "@/context/permission"
-import { type ImageAttachmentPart, usePrompt } from "@/context/prompt"
+import { type ImageAttachmentPart, type Prompt, usePrompt } from "@/context/prompt"
 import { usePlatform } from "@/context/platform"
 import { useSDK } from "@/context/sdk"
 import { useSync } from "@/context/sync"
 import { createSessionTabs } from "@/pages/session/helpers"
 import { showToast } from "@/utils/toast"
+import { createDictation, type SpeechRecognitionLike } from "@/utils/dictation"
+import { getSpeechRecognitionCtor } from "@/utils/runtime-adapters"
 import { PromptInputV2, type PromptInputV2Suggestion } from "@opencode-ai/session-ui/v2/prompt-input"
 import {
   createPromptInputV2Controller,
@@ -44,10 +46,45 @@ export type PromptInputV2ComposerController = PromptInputV2Interaction & {
   readonly model: PromptInputProps["controls"]["model"]
 }
 
+// Dictated speech lands in the composer's text: appended to the last text
+// part's content (so surrounding mentions keep their document order) and the
+// cursor pushed to the end, the same shape an edit load uses to set text.
+function appendTranscript(prompt: ReturnType<typeof usePrompt>, text: string) {
+  const parts: Prompt = [...prompt.current()]
+  const index = parts.findLastIndex((part) => part.type === "text")
+  if (index === -1) {
+    parts.push({ type: "text", content: text, start: 0, end: text.length })
+  } else {
+    const part = parts[index]
+    if (part.type !== "text") return
+    const content = part.content.trimEnd() ? `${part.content.replace(/\s+$/, "")} ${text}` : part.content + text
+    parts[index] = { ...part, content, end: part.start + content.length }
+  }
+  prompt.set(parts, promptLength(parts))
+}
+
 export function PromptInputV2Composer(props: PromptInputV2ComposerProps) {
   const dialog = useDialog()
   const command = useCommand()
   const language = useLanguage()
+  const prompt = usePrompt()
+  const [listening, setListening] = createSignal(false)
+
+  const dictation = createDictation({
+    recognition: () => getSpeechRecognitionCtor<SpeechRecognitionLike>(globalThis.window),
+    onFinal: (text) => appendTranscript(prompt, text),
+    onError: () => showToast({ title: language.t("prompt.dictation.failed") }),
+    onStateChange: setListening,
+  })
+  onCleanup(() => dictation.dispose())
+
+  const toggleDictation = () => {
+    if (dictation.listening()) {
+      dictation.stop()
+      return
+    }
+    if (!dictation.start()) showToast({ title: language.t("prompt.dictation.failed") })
+  }
 
   return (
     <div class="flex flex-col gap-3">
@@ -58,6 +95,22 @@ export function PromptInputV2Composer(props: PromptInputV2ComposerProps) {
         variantControlVisible={!props.controller.model.loading}
         attachKeybind={command.keybindParts("file.attach")}
         attachShortcut={command.keybind("file.attach")}
+        dictationControl={
+          <Show when={dictation.supported()}>
+            <TooltipV2 placement="top" gutter={4} value={language.t("prompt.action.dictate")}>
+              <ButtonV2
+                data-action="prompt-dictate"
+                variant="ghost-muted"
+                size="normal"
+                style={{ height: "28px" }}
+                classList={{ "text-v2-icon-icon-info": listening() }}
+                onClick={toggleDictation}
+              >
+                <Icon name="microphone" class="size-4 shrink-0" />
+              </ButtonV2>
+            </TooltipV2>
+          </Show>
+        }
         modelControl={
           <PromptInputV2ModelControl
             loading={props.controller.model.loading}
@@ -505,6 +558,7 @@ function PromptInputV2ModelControl(props: {
       <TooltipV2
         placement="top"
         gutter={4}
+        class="min-w-0"
         value={
           <>
             {props.title}

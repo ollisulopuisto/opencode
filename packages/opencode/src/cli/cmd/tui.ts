@@ -65,10 +65,10 @@ async function input(value?: string) {
 
 export function resolveThreadDirectory(
   project?: string,
-  envPWD = process.env["OPENCODE_CALLER_DIR"] || process.env["INIT_CWD"] || process.env["OLDPWD"] || process.env.PWD,
+  envPWD = process.env["OPENCODE_CALLER_DIR"] || process.env["INIT_CWD"] || process.env.PWD,
   cwd = process.cwd(),
 ) {
-  const root = Filesystem.resolve(envPWD ?? cwd)
+  const root = Filesystem.resolve(project ? (envPWD ?? cwd) : cwd)
   if (project) return Filesystem.resolve(path.isAbsolute(project) ? project : path.join(root, project))
   return root
 }
@@ -127,6 +127,11 @@ export const TuiThreadCommand = cmd({
       .option("mini", {
         type: "boolean",
         describe: "start the minimal interactive interface",
+        default: false,
+      })
+      .option("harness", {
+        type: "boolean",
+        describe: "enable autonomous harness supervisory state tracking and verification in the session",
         default: false,
       })
       .option("replay", {

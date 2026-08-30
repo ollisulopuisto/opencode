@@ -59,6 +59,10 @@ export function DialogSelectDirectoryV2(props: DialogSelectDirectoryV2Props) {
   const [error, setError] = createSignal(false)
   const [rootValid, setRootValid] = createSignal(false)
   const listings = new Map<string, Promise<Array<{ name: string; type: "file" | "directory" }> | undefined>>()
+  // A promoted (already in-flight) listing must feed the tree only once: the eager
+  // preload batches it, and re-batching the same paths on expansion throws
+  // "Path already exists" inside @pierre/trees.
+  const batched = new Set<string>()
   const loads = createPriorityTaskQueue<Array<{ name: string; type: "file" | "directory" }> | undefined>(3)
   const advanced = new Set<string>()
   let tree: FileTree | undefined
@@ -145,7 +149,10 @@ export function DialogSelectDirectoryV2(props: DialogSelectDirectoryV2Props) {
       if (!key) setError(true)
       return false
     }
-    tree?.batch(policy.entries(key, nodes).map((item) => ({ type: "add", path: item })))
+    if (!batched.has(key)) {
+      batched.add(key)
+      tree?.batch(policy.entries(key, nodes).map((item) => ({ type: "add", path: item })))
+    }
     if (!eager && advanceTreePreload(advanced, key)) {
       for (const directory of preloadTreeDirectories(key, nodes)) void load(directory, generation, true)
     }
