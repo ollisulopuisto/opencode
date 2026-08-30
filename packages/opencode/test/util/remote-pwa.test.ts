@@ -48,6 +48,40 @@ describe("Remote PWA Pure Helpers", () => {
     expect(refs[1].name).toBe("App")
   })
 
+  test("parseFileRefs keeps bracketed references intact (no swallowed closing bracket)", () => {
+    const refs = parseFileRefs(
+      "Implemented ([file:///Users/dst/x/harness/src/classifier.ts] and " +
+        "[file:///Users/dst/x/harness/tests/ts/classifier.ts])",
+    )
+    expect(refs.length).toBe(2)
+    expect(refs[0].path).toBe("/Users/dst/x/harness/src/classifier.ts")
+    expect(refs[0].name).toBe("classifier.ts")
+    expect(refs[1].path).toBe("/Users/dst/x/harness/tests/ts/classifier.ts")
+    expect(refs[1].name).toBe("classifier.ts")
+  })
+
+  test("parseFileRefs does not create ghost refs for paths with spaces", () => {
+    const refs = parseFileRefs("[file:///Users/dst/My Repo/src/a.ts]")
+    expect(refs.length).toBe(1)
+    expect(refs[0].path).toBe("/Users/dst/My Repo/src/a.ts")
+    expect(refs[0].name).toBe("a.ts")
+  })
+
+  test("parseFileRefs deduplicates bracketed references and rejects host/relative forms", () => {
+    expect(parseFileRefs("[file:///a/b.ts] then [file:///a/b.ts] again").length).toBe(1)
+    expect(parseFileRefs("[file://host/share/x.txt]")).toEqual([])
+    expect(parseFileRefs("[file://relative/path.txt]")).toEqual([])
+  })
+
+  test("parseFileRefs parses markdown links with a label", () => {
+    const refs = parseFileRefs(
+      "Implemented [harness/src/project-memory.ts]" + "(file:///Users/dst/x/harness/src/project-memory.ts), verified.",
+    )
+    expect(refs.length).toBe(1)
+    expect(refs[0].path).toBe("/Users/dst/x/harness/src/project-memory.ts")
+    expect(refs[0].name).toBe("harness/src/project-memory.ts")
+  })
+
   test("isMermaidLang matches only mermaid and mmd case-insensitively", () => {
     expect(isMermaidLang("mermaid")).toBe(true)
     expect(isMermaidLang("Mermaid")).toBe(true)

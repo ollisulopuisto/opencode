@@ -1,7 +1,5 @@
 // Mirrored in agy-remote's src/agy_remote/static/format.js (scanFileRefs /
-// parseFileRefs) -- keep the two in sync. The JS port also handles the
-// bracketed [file:///path] form without letting the bare-path scan swallow
-// the closing bracket, which this version does; its tests cover that shape.
+// parseFileRefs) -- keep the two in sync.
 
 export function peerNotice(count: number): string {
   if (count === 1) return "1 device connected"
@@ -19,36 +17,71 @@ export type FileRef = {
   raw: string
 }
 
-export function parseFileRefs(text: string): FileRef[] {
-  if (!text) return []
-  const seen = new Set<string>()
-  const results: FileRef[] = []
+type ScanHit = {
+  index: number
+  raw: string
+  path: string
+  label: string | null
+}
 
-  // Matches [name](file:///path) or file:///path or [file:///path]
-  // Requires empty-host form: file:///... (three slashes followed by non-slash)
-  // Rejects file://host/path
-  const pattern = /(?:\[([^\]]+)\]\()?file:\/\/\/([^\s\)"'<>]+)\)?/g
-  let match: RegExpExecArray | null
-
-  while ((match = pattern.exec(text)) !== null) {
-    const rawPath = "/" + match[2]
-    // Normalize path to eliminate double slashes while keeping absolute
-    const normalized = "/" + rawPath.replace(/^\/+/, "").replace(/\/+/g, "/")
-    if (seen.has(normalized)) continue
-    seen.add(normalized)
-
-    const base = normalized.split("/").filter(Boolean).pop() ?? "file"
-    const label = match[1]?.trim()
-    const name = label && !label.startsWith("file://") ? label : base
-
-    results.push({
-      path: normalized,
-      name,
-      raw: match[0],
-    })
+// Three separate scans (markdown link, bracketed, bare) instead of one
+// optional-group regex: the bare scan runs inside every bracketed reference
+// and would otherwise swallow the closing bracket or truncate paths with
+// spaces into ghost refs. Hits are ordered by position and later overlaps are
+// dropped by the cursor guard in parseFileRefs.
+function scanFileRefs(value: string): ScanHit[] {
+  const found: ScanHit[] = []
+  function collect(re: RegExp, pathGroup: number, labelGroup: number | null) {
+    re.lastIndex = 0
+    let match: RegExpExecArray | null
+    while ((match = re.exec(value)) !== null) {
+      found.push({
+        index: match.index,
+        raw: match[0],
+        path: match[pathGroup],
+        label: labelGroup ? match[labelGroup] : null,
+      })
+      if (match.index === re.lastIndex) re.lastIndex += 1
+    }
   }
+  collect(/\[([^\]\n]+)\]\(file:\/\/\/([^)\s]+)\)/g, 2, 1)
+  collect(/\[file:\/\/(\/[^\]\n]+)\]/g, 1, null)
+  collect(/file:\/\/\/([^\s\)\]"'<>]+)/g, 1, null)
+  // The markdown and bare scans consume all three slashes of `file:///`, so
+  // their capture is missing the leading slash of the path; the bracketed
+  // scan keeps it. Normalize before anything else looks.
+  for (const hit of found) {
+    if (!hit.path.startsWith("/")) hit.path = "/" + hit.path
+  }
+  found.sort((a, b) => a.index - b.index)
+  return found
+}
 
-  return results
+function refName(hit: ScanHit, path: string): string {
+  const base = path.slice(path.lastIndexOf("/") + 1) || path
+  if (hit.label && !/^file:\/\//.test(hit.label)) {
+    return hit.label.replace(/\s+$/, "")
+  }
+  return base
+}
+
+export function parseFileRefs(text: string): FileRef[] {
+  const value = String(text ?? "")
+  const refs: FileRef[] = []
+  const seen = new Set<string>()
+  let cursor = 0
+  for (const hit of scanFileRefs(value)) {
+    // A raw earlier in the document already swallowed this match -- the
+    // bare-path scan runs inside every bracketed reference, and without this
+    // guard a path with spaces yields a truncated ghost ref.
+    if (hit.index < cursor) continue
+    cursor = hit.index + hit.raw.length
+    const path = hit.path.replace(/\s+$/, "")
+    if (seen.has(path)) continue
+    seen.add(path)
+    refs.push({ raw: hit.raw, path, name: refName(hit, path) })
+  }
+  return refs
 }
 
 export function isMermaidLang(lang: string | undefined): boolean {
