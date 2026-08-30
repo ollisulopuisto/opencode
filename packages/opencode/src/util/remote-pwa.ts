@@ -1,3 +1,8 @@
+// Mirrored in agy-remote's src/agy_remote/static/format.js (scanFileRefs /
+// parseFileRefs) -- keep the two in sync. The JS port also handles the
+// bracketed [file:///path] form without letting the bare-path scan swallow
+// the closing bracket, which this version does; its tests cover that shape.
+
 export function peerNotice(count: number): string {
   if (count === 1) return "1 device connected"
   return `${count} devices connected`
