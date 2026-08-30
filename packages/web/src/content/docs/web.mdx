@@ -124,6 +124,22 @@ This allows you to use both the web interface and terminal simultaneously, shari
 
 ---
 
+## Web & PWA Features
+
+### Mermaid Diagrams
+
+Fenced \`\`\`mermaid code blocks render as diagrams instead of code, with pinch-to-zoom on touch devices (two fingers zoom up to 4×, returning to 1× restores the natural layout). Invalid diagrams fall back to showing their source, and the copy button still copies the source. The mermaid bundle loads lazily — sessions without diagrams never download it.
+
+### Streaming-friendly text selection
+
+Text selections survive while a message is streaming: plain-prose updates are appended to the DOM instead of re-rendering the whole block, so you can select and copy an earlier answer while the assistant keeps writing.
+
+### Command menu
+
+The composer's **"+"** menu opens a grouped, searchable command menu with every slash command — your custom commands from `opencode.json` / `.opencode/command/` plus the built-ins. Picking a command fills the input as `/name ` so you can add arguments before sending. Typing `/` directly opens the same menu.
+
+---
+
 ## Config File
 
 You can also configure server settings in your `opencode.json` config file:
