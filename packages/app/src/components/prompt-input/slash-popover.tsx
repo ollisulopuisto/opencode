@@ -3,6 +3,7 @@ import { FileIcon } from "@opencode-ai/ui/file-icon"
 import { Icon } from "@opencode-ai/ui/icon"
 import { Tag } from "@opencode-ai/ui/v2/badge-v2"
 import { KeybindV2 } from "@opencode-ai/ui/v2/keybind-v2"
+import { suggestionRows } from "@opencode-ai/session-ui/v2/prompt-input/groups"
 import { getDirectory, getFilename } from "@opencode-ai/core/util/path"
 
 export type AtOption =
@@ -27,6 +28,7 @@ export interface SlashCommand {
   keybind?: string
   type: "builtin" | "custom"
   source?: "command" | "mcp" | "skill"
+  group?: string
 }
 
 type PromptPopoverProps = {
@@ -286,8 +288,23 @@ export const PromptPopover: Component<PromptPopoverProps> = (props) => {
                 </div>
               }
             >
-              <For each={props.slashFlat}>
-                {(cmd) => {
+              <For each={suggestionRows(props.slashFlat)}>
+                {(row) => {
+                  if (row.type === "group") {
+                    return (
+                      <div
+                        class="px-2 pt-2 pb-1"
+                        classList={{
+                          "text-[11px] font-[440] uppercase tracking-wide text-v2-text-text-faint":
+                            props.newLayoutDesigns,
+                          "text-11-regular uppercase tracking-wide text-text-subtle": !props.newLayoutDesigns,
+                        }}
+                      >
+                        {row.label}
+                      </div>
+                    )
+                  }
+                  const cmd = row.item
                   const keybind = () => props.commandKeybind(cmd.id)
                   const keybindParts = () => props.commandKeybindParts(cmd.id)
                   return (
