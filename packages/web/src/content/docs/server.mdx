@@ -69,6 +69,43 @@ The [`/tui`](#tui) endpoint can be used to drive the TUI through the server. For
 
 ---
 
+## Host a shared server
+
+`opencode host` combines a server and a client in one command. It starts a server (or reuses one that is already running), prints a QR code you can scan with your phone to pair the PWA / Web UI, and then attaches a TUI to that same server. Any additional `opencode host` invocation — in another terminal, tmux window, or project directory — attaches to the same server, so all clients share the same sessions.
+
+```bash
+# First terminal: starts the server, prints the QR code, opens a TUI
+opencode host
+
+# More terminals / tmux windows: attach to the same server from other directories
+opencode host ~/work/project-b
+opencode host ~/work/project-c --mini
+```
+
+#### Options
+
+| Flag               | Description                                                                     | Default                              |
+| ------------------ | ------------------------------------------------------------------------------- | ------------------------------------ |
+| `[project]`        | Directory to start the TUI in                                                    | current directory                    |
+| `-p, --password`   | Basic auth password (defaults to `OPENCODE_SERVER_PASSWORD` or the running server's) | generated when starting a server |
+| `-u, --username`   | Basic auth username                                                              | `opencode`                           |
+| `--idle-exit`      | Seconds to keep the server alive after the last client disconnects               | `30` (`0` disables)                  |
+| `--no-qr`          | Skip printing the QR pairing code                                                | `false`                              |
+| `--mini`           | Start the minimal interactive interface                                          | `false`                              |
+| `-c, --continue`   | Continue the last session                                                        |                                      |
+| `-s, --session`    | Session ID to continue                                                           |                                      |
+| `--fork`           | Fork the session when continuing (use with `--continue` or `--session`)          |                                      |
+
+The network flags from `opencode serve` (`--port`, `--hostname`, `--mdns`, `--cors`, `--socket`) are also supported.
+
+#### Lifecycle
+
+- Exiting a TUI only detaches that client; the server keeps running for the other attached clients (TUI, PWA, scripts).
+- The process that started the server keeps it alive until the last client has been disconnected for `--idle-exit` seconds, then shuts everything down. Set `--idle-exit 0` to keep the server running until you stop it with `Ctrl-C`.
+- Connection details for the running server (port, password) are stored in `~/.local/share/opencode/state/host.json` (mode `0600`) so later `opencode host` invocations can find and authenticate to it. The file is removed when the server exits cleanly.
+
+---
+
 ## Spec
 
 The server publishes an OpenAPI 3.1 spec that can be viewed at:
