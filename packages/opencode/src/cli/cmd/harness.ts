@@ -125,7 +125,28 @@ export const HarnessCommand = {
       const result = engine.initializeHarness({ preference: prefChoice as any })
       s.stop("Harness workspace initialized successfully!")
 
-      UI.println(result.summaryMarkdown)
+      prompts.note(
+        [
+          `Ecosystem:       ${assessment.detectedLanguage.toUpperCase()} (${assessment.discoveredTestsCount} test files)`,
+          `Active Providers: ${assessment.availableProviders.join(", ")}`,
+          ``,
+          `Multi-Lane Roles (${result.config.economicPreference}):`,
+          `  • Explorer:    ${result.config.roles.explorer}`,
+          `  • Planner:     ${result.config.roles.planner}`,
+          `  • Implementer: ${result.config.roles.implementer}`,
+          `  • Verifier:    ${result.config.roles.verifier}`,
+          `  • Debugger:    ${result.config.roles.debugger}`,
+          ``,
+          `Guardrails:      Max ${result.config.budget.maxFilesChanged} files, +${result.config.budget.maxLinesAdded}/-${result.config.budget.maxLinesDeleted} lines`,
+          `Config Saved:    .opencode/harness.json`,
+          ``,
+          `Quickstart Commands:`,
+          `  opencode harness "Fix race condition in database pool"`,
+          `  opencode harness --smoke`,
+          `  opencode harness --roi`,
+        ].join("\n"),
+        "Workspace Harness Profile",
+      )
       prompts.outro("🏆 OpenCode Harness Onboarding Complete! You are ready to build.")
       return
     }
@@ -134,8 +155,16 @@ export const HarnessCommand = {
       prompts.log.info(`Analyzing available model providers with preference '${args.roiPref}'...`)
       const { ModelRoiAnalyzer } = await import(path.join(harnessDir, "src/model-roi.ts"))
       const analysis = ModelRoiAnalyzer.analyzeAndAssign(args.roiPref as any)
-      const report = ModelRoiAnalyzer.formatReport(analysis)
-      UI.println(report)
+      const lines = [
+        `Economic Policy:    ${analysis.preference}`,
+        `Active Providers:   ${analysis.availableProviders.join(", ")}`,
+        ``,
+        `Multi-Lane Role Assignments:`,
+        ...Object.values(analysis.assignedRoles).map(
+          (a) => `  • ${a.role.toUpperCase().padEnd(12)} ${a.selectedModel.id.padEnd(28)} (Score: ${a.roiScore} | Fallback: ${a.fallbackModel?.id ?? "none"})`
+        ),
+      ]
+      prompts.note(lines.join("\n"), "Model Cost-Benefit & ROI Analysis")
       prompts.outro("✅ Automated Model Cost-Benefit & ROI Analysis Complete")
       return
     }
