@@ -1,0 +1,5 @@
+#!/bin/sh
+# Automatically ensure local binary is built and symlinked after git pull/merge
+if [ -f "./script/install-local.sh" ]; then
+  ./script/install-local.sh --link-only >/dev/null 2>&1 || true
+fi

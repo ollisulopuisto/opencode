@@ -50,8 +50,8 @@ export const UpdateCommand = {
     spinner.stop("Dependencies up to date")
 
     if (args.rebuild) {
-      spinner.start("Rebuilding standalone native binary (bytecode precompiled)...")
-      const build = spawnSync("bun", ["run", "script/build.ts", "--single", "--skip-embed-web-ui"], {
+      spinner.start("Rebuilding standalone native binary...")
+      const build = spawnSync("bun", ["run", "packages/opencode/script/build.ts", "--single"], {
         cwd: root,
         encoding: "utf8",
       })
@@ -61,16 +61,9 @@ export const UpdateCommand = {
         prompts.outro("Build failed")
         return
       }
-      const fs = await import("fs")
-      const distBin = path.join(root, "packages/opencode/dist/opencode-darwin-arm64/bin/opencode")
-      const localBin = path.join(process.env.HOME || "/Users/dst", ".local/bin/opencode")
-      if (fs.existsSync(distBin)) {
-        try {
-          fs.copyFileSync(distBin, localBin)
-          fs.chmodSync(localBin, 0o755)
-        } catch {}
-      }
-      spinner.stop("Standalone binary compiled & installed to ~/.local/bin/opencode")
+      const installScript = path.join(root, "script/install-local.sh")
+      spawnSync(installScript, ["--link-only"], { cwd: root, encoding: "utf8" })
+      spinner.stop("Standalone binary compiled & symlinked to ~/.local/bin/opencode")
     }
 
     if (args.restart) {
