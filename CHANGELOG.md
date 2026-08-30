@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Calendar Versioning](https://calver.org/) (`vYY.MM.DD.N`).
 
+## [v26.08.31.15664] - 2026-08-31
+
+### Changed
+- **Repository Issue Tracking Links**: Updated TUI crash report generator and desktop menu feedback/bug report URLs to point to fork issue tracker (`ollisulopuisto/opencode`).
+
 ## [v26.08.31.15663] - 2026-08-31
 
 ### Fixed
