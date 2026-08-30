@@ -5,7 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Calendar Versioning](https://calver.org/) (`vYY.MM.DD.N`).
 
-<<<<<<< HEAD
+## [v26.08.30.15638] - 2026-08-30
+
+### Fixed
+- Fixed `serve --socket` silently continuing with a dead unix socket bridge: the bridge now waits for its `listening` event, fails `Server.listen` on socket errors, releases the TCP listener, and removes the socket file instead of leaving a path that refuses connections.
+- Fixed `attach` dying with "Was there a typo in the url or port?" when `/tmp/opencode.sock` existed but nothing accepted on it: attach now probe-connects the default socket, warns, and falls back to `http://127.0.0.1:8090`.
+
+### Added
+- Added socket bridge regression tests (`packages/opencode/test/server/socket-bridge.test.ts`) and attach target resolution tests (`packages/opencode/test/cli/attach-target.test.ts`).
+
 ## [v26.08.30.15637] - 2026-08-30
 
 ### Added
