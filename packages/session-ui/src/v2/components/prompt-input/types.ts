@@ -102,5 +102,7 @@ export type PromptInputV2Suggestion = {
   path?: string
   keybind?: string[]
   recent?: boolean
+  /** Display label used to group consecutive suggestions under a header. */
+  group?: string
   mention?: PromptInputV2FilePart | PromptInputV2AgentPart
 }

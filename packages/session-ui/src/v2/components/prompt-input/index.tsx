@@ -4,6 +4,7 @@ import { Icon } from "@opencode-ai/ui/icon"
 import { IconButton } from "@opencode-ai/ui/icon-button"
 import { ProviderIcon } from "@opencode-ai/ui/provider-icon"
 import { useI18n } from "@opencode-ai/ui/context/i18n"
+import { suggestionRows } from "./groups"
 import { ButtonV2 } from "@opencode-ai/ui/v2/button-v2"
 import { Icon as IconV2 } from "@opencode-ai/ui/v2/icon"
 import { IconButtonV2 } from "@opencode-ai/ui/v2/icon-button-v2"
@@ -641,28 +642,37 @@ export function PromptInputV2Popover(props: {
         when={props.items.length > 0}
         fallback={<div class="px-2 py-1 text-v2-text-text-muted">{props.emptyLabel}</div>}
       >
-        <For each={props.items}>
-          {(item) => (
-            <button
-              type="button"
-              data-suggestion-id={item.id}
-              class="flex w-full items-center gap-2 rounded-md px-2 py-1 text-start hover:bg-v2-overlay-simple-overlay-hover"
-              classList={{ "bg-v2-overlay-simple-overlay-hover": props.activeID === item.id }}
-              onPointerMove={() => props.onActiveChange(item)}
-              onClick={() => props.onSelect(item)}
-            >
-              <div class="flex min-w-0 flex-1 items-center gap-2">
-                <PromptInputV2SuggestionIcon item={item} />
-                <span class="shrink-0 text-v2-text-text-base">{item.label}</span>
-                <Show when={item.description}>
-                  <span class="min-w-0 truncate text-v2-text-text-muted">{item.description}</span>
-                </Show>
+        <For each={suggestionRows(props.items)}>
+          {(row) =>
+            row.type === "group" ? (
+              <div
+                role="presentation"
+                class="px-2 pt-2 pb-1 text-[11px] font-[440] uppercase tracking-wide text-v2-text-text-faint"
+              >
+                {row.label}
               </div>
-              <Show when={item.keybind?.length}>
-                <span class="shrink-0 text-v2-text-text-muted">{item.keybind?.join("+")}</span>
-              </Show>
-            </button>
-          )}
+            ) : (
+              <button
+                type="button"
+                data-suggestion-id={row.item.id}
+                class="flex w-full items-center gap-2 rounded-md px-2 py-1 text-start hover:bg-v2-overlay-simple-overlay-hover"
+                classList={{ "bg-v2-overlay-simple-overlay-hover": props.activeID === row.item.id }}
+                onPointerMove={() => props.onActiveChange(row.item)}
+                onClick={() => props.onSelect(row.item)}
+              >
+                <div class="flex min-w-0 flex-1 items-center gap-2">
+                  <PromptInputV2SuggestionIcon item={row.item} />
+                  <span class="shrink-0 text-v2-text-text-base">{row.item.label}</span>
+                  <Show when={row.item.description}>
+                    <span class="min-w-0 truncate text-v2-text-text-muted">{row.item.description}</span>
+                  </Show>
+                </div>
+                <Show when={row.item.keybind?.length}>
+                  <span class="shrink-0 text-v2-text-text-muted">{row.item.keybind?.join("+")}</span>
+                </Show>
+              </button>
+            )
+          }
         </For>
       </Show>
     </div>
