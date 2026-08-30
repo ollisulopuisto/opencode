@@ -81,6 +81,5 @@ describe("HostState", () => {
     const port = server.port
     await server.stop(true)
     await new Promise((resolve) => setTimeout(resolve, 20))
-    expect(await HostState.probe(`http://127.0.0.1:${port}`, undefined, 200)).toBe(false)
-  })
+    expect(await HostState.probe(`http://127.0.0.1:${port}`, undefined, 200)).toBe(false)  })
 })

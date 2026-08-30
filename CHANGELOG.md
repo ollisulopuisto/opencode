@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Calendar Versioning](https://calver.org/) (`vYY.MM.DD.N`).
 
+<<<<<<< HEAD
 ## [v26.08.30.15637] - 2026-08-30
 
 ### Added
@@ -52,6 +53,13 @@ and this project adheres to [Calendar Versioning](https://calver.org/) (`vYY.MM.
 ### Fixed
 - Fixed environment credential inheritance in headless subprocess runner to preserve system `~/.local/share/opencode/auth.json` provider keys.
 - Enhanced `LoopDetector` and subprocess runner with stable tool call ID tracking and event deduplication for real-time streaming tool executions.
+- Fixed QR pairing URL to prefer Tailscale MagicDNS hostname over raw IP and encode basic auth credentials into `auth_token` query parameter to prevent mobile browsers from stripping credentials during scan.
+- Fixed ghost client count accumulation in `WebSocketTracker` by tracking per-client `lastSeen` timestamps on frame arrival and sweeping connections silent > 45s with code 1000.
+
+### Added
+- Added secure file viewing endpoint `GET /api/file` (`serveFileView`) enforcing path resolution, symlink containment within sanctioned roots, binary NUL-byte rejection, and 128 KB payload truncation.
+- Added remote PWA pure helpers (`remote-pwa.ts`) for device count formatting (`peerNotice`), stale connection checks (`socketIsStale`), transcript file reference parsing (`parseFileRefs`), Mermaid language detection (`isMermaidLang`), pinch-zoom scaling (`clampZoom`), double-tap detection (`isDoubleTap`), and envelope parsing (`parseEnvelope`).
+- Added unit test suite in `packages/opencode/test/util/remote-pwa.test.ts`.
 
 ## [v26.08.30.15634] - 2026-08-30
 
