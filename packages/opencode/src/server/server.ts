@@ -2,10 +2,11 @@ import "./init-projectors"
 
 import { NodeHttpServer } from "@effect/platform-node"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
-import { ConfigProvider, Context, Effect, Exit, Layer, Scope } from "effect"
+import { Cause, ConfigProvider, Context, Effect, Exit, Layer, Scope } from "effect"
 import { HttpRouter, HttpServer } from "effect/unstable/http"
 import { OpenApi } from "effect/unstable/httpapi"
 import { createServer } from "node:http"
+import type * as net from "node:net"
 import { MDNS } from "./mdns"
 import { HttpApiApp } from "./routes/instance/httpapi/server"
 import { disposeMiddleware } from "./routes/instance/httpapi/lifecycle"
@@ -113,9 +114,15 @@ const listenEffect: (opts: ListenOptions) => Effect.Effect<EffectListener, unkno
         client.on("error", () => target.destroy())
         target.on("error", () => client.destroy())
       })
-      socketBridge.listen(opts.socket)
 
       const tcpStop = yield* makeStop(tcpState, unpublishMdns, listenerUrl)
+
+      const listened = yield* Effect.exit(listenSocketBridge(socketBridge, opts.socket))
+      if (Exit.isFailure(listened)) {
+        socketBridge.close()
+        yield* tcpStop(true).pipe(Effect.ignore)
+        return yield* Effect.fail(Cause.squash(listened.cause))
+      }
 
       return {
         hostname: opts.hostname,
@@ -190,8 +197,26 @@ function socketListenerLayer(opts: ListenOptions, socketPath: string) {
   )
 }
 
-function startSocketListener(opts: ListenOptions, socketPath: string) {
-  const scope = Scope.makeUnsafe()
+// The bridge listen failure is only surfaced via the async `error` event under
+// Node; resolving on `listening` (and failing on `error`) keeps a dead socket
+// file from masquerading as a healthy listener.
+function listenSocketBridge(server: net.Server, socketPath: string) {
+  return Effect.tryPromise({
+    try: () =>
+      new Promise<void>((resolve, reject) => {
+        const onError = (error: Error) => reject(error)
+        server.once("error", onError)
+        server.listen(socketPath, () => {
+          server.off("error", onError)
+          server.on("error", (error) => console.error(`[server] unix socket bridge ${socketPath}: ${error.message}`))
+          resolve()
+        })
+      }),
+    catch: (error) => (error instanceof Error ? error : new Error(String(error))),
+  })
+}
+
+function startSocketListener(opts: ListenOptions, socketPath: string) {  const scope = Scope.makeUnsafe()
   try {
     const fs = require("node:fs")
     if (fs.existsSync(socketPath)) {

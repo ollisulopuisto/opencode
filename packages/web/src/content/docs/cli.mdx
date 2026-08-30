@@ -114,6 +114,8 @@ opencode web --port 4096 --hostname 0.0.0.0
 opencode attach http://10.20.30.40:4096
 ```
 
+When called without arguments, attach first tries `/tmp/opencode.sock`. A socket file on disk does not guarantee a live listener — a crashed server leaves it behind — so the socket is probe-connected first. If it refuses connections, a warning is printed and attach falls back to `http://127.0.0.1:8090`. Pass a `url` or `--socket` explicitly to override discovery.
+
 #### Flags
 
 | Flag                                     | Short | Description                                                                |

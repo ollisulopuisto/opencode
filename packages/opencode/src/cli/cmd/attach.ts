@@ -1,10 +1,42 @@
 import { cmd } from "./cmd"
 import path from "path"
+import fs from "node:fs"
+import net from "node:net"
 import { UI } from "@/cli/ui"
 import { errorMessage } from "@opencode-ai/tui/util/error"
 import { validateSession } from "../tui/validate-session"
 import { ServerAuth } from "@/server/auth"
 import { Flag } from "@opencode-ai/core/flag/flag"
+
+const defaultSocketPath = "/tmp/opencode.sock"
+const defaultUrl = "http://127.0.0.1:8090"
+
+// A socket file on disk says nothing about a live listener — a crashed server
+// leaves the file behind and connect() gets refused. Probe before trusting it,
+// then fall back to the TCP default.
+export async function resolveAttachTarget(input: { url?: string; socket?: string; defaultSocket?: string; defaultUrl?: string }) {
+  if (input.socket) return input.socket
+  if (input.url) return input.url
+  const socketPath = input.defaultSocket ?? defaultSocketPath
+  const fallbackUrl = input.defaultUrl ?? defaultUrl
+  if (await probeSocket(socketPath)) return socketPath
+  // fs, not Bun.file: Bun.file().exists() reports false for unix sockets.
+  if (fs.existsSync(socketPath)) {
+    UI.println(`${socketPath} exists but refuses connections; falling back to ${fallbackUrl}`)
+  }
+  return fallbackUrl
+}
+
+function probeSocket(socketPath: string) {
+  return new Promise<boolean>((resolve) => {
+    const socket = net.connect(socketPath)
+    socket.once("connect", () => {
+      socket.destroy()
+      resolve(true)
+    })
+    socket.once("error", () => resolve(false))
+  })
+}
 
 export const AttachCommand = cmd({
   command: "attach [url]",
@@ -65,15 +97,7 @@ export const AttachCommand = cmd({
         describe: "cap visible mini replay to the newest N messages",
       }),
   handler: async (args) => {
-    let targetUrl = args.socket ? args.socket : args.url
-    if (!targetUrl) {
-      const fs = await import("fs")
-      if (fs.existsSync("/tmp/opencode.sock")) {
-        targetUrl = "/tmp/opencode.sock"
-      } else {
-        targetUrl = "http://127.0.0.1:8090"
-      }
-    }
+    const targetUrl = await resolveAttachTarget(args)
 
     if (args.replay === true) {
       UI.error("--replay is not supported; replay is enabled by default")
