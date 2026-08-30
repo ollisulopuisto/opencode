@@ -41,4 +41,25 @@ describe("waitForEnter", () => {
     })
     expect(settled).toBe(true)
   })
+
+  test("resolves after the timeout when no line arrives", async () => {
+    const input = ttyStream()
+    let settled = false
+    await Prompt.waitForEnter(input, 30).then(() => {
+      settled = true
+    })
+    expect(settled).toBe(true)
+  })
+
+  test("does not resolve before the timeout when no line arrives", async () => {
+    const input = ttyStream()
+    let settled = false
+    const pending = Prompt.waitForEnter(input, 200).then(() => {
+      settled = true
+    })
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(settled).toBe(false)
+    await pending
+    expect(settled).toBe(true)
+  })
 })

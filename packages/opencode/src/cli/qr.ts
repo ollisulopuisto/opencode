@@ -10,8 +10,54 @@ export type NetworkEndpoints = {
   localhost: string
 }
 
-export function detectNetworkEndpoints(port: number): NetworkEndpoints {
-  const nets = networkInterfaces()
+// The MagicDNS name of this machine (trailing dot stripped), from the
+// Tailscale CLI. Undefined when Tailscale is not installed or not up.
+export function tailscaleDnsName(): string | undefined {
+  try {
+    const status = spawnSync("tailscale", ["status", "--json"], { encoding: "utf8", timeout: 1000 })
+    if (status.status !== 0 || !status.stdout) return undefined
+    const dnsName = (JSON.parse(status.stdout) as { Self?: { DNSName?: string } }).Self?.DNSName
+    if (!dnsName) return undefined
+    return dnsName.replace(/\.$/, "")
+  } catch {
+    return undefined
+  }
+}
+
+export function tailscaleHttpsUrl(dnsName: string): string {
+  return `https://${dnsName.replace(/\.$/, "")}`
+}
+
+// Publishes `http://127.0.0.1:<port>` through Tailscale Serve so the phone can
+// pair over real HTTPS (`https://<machine>.ts.net`). Returns the HTTPS URL, or
+// undefined when Tailscale is unavailable. The serve config persists at the
+// tailnet level; re-running is idempotent.
+export function enableTailscaleServe(port: number): string | undefined {
+  try {
+    const serve = spawnSync("tailscale", ["serve", "--bg", String(port)], { encoding: "utf8", timeout: 5000 })
+    if (serve.status !== 0) return undefined
+  } catch {
+    return undefined
+  }
+  const dnsName = tailscaleDnsName()
+  return dnsName ? tailscaleHttpsUrl(dnsName) : undefined
+}
+
+// Detects an already-configured Tailscale Serve endpoint for attach flows, so
+// re-pairing keeps the HTTPS URL without touching the tailnet config.
+export async function detectTailscaleServe(port: number, timeoutMs = 2000): Promise<string | undefined> {
+  const dnsName = tailscaleDnsName()
+  if (!dnsName) return undefined
+  const url = tailscaleHttpsUrl(dnsName)
+  try {
+    await fetch(url, { signal: AbortSignal.timeout(timeoutMs) })
+    return url
+  } catch {
+    return undefined
+  }
+}
+
+export function detectNetworkEndpoints(port: number): NetworkEndpoints {  const nets = networkInterfaces()
   const lan: string[] = []
   let tailscale: string | undefined
   let magicDns: string | undefined
@@ -64,7 +110,12 @@ export function detectNetworkEndpoints(port: number): NetworkEndpoints {
   }
 }
 
-export async function printPairingInfo(options: { port?: number; password?: string; socket?: string }) {
+export async function printPairingInfo(options: {
+  port?: number
+  password?: string
+  socket?: string
+  httpsUrl?: string
+}) {
   if (options.socket) {
     UI.println(UI.Style.TEXT_INFO_BOLD + "  Socket:            ", UI.Style.TEXT_NORMAL, `unix:${options.socket}`)
     return
@@ -74,6 +125,14 @@ export async function printPairingInfo(options: { port?: number; password?: stri
   const password = options.password ?? process.env.OPENCODE_SERVER_PASSWORD
 
   UI.empty()
+  if (options.httpsUrl) {
+    UI.println(
+      UI.Style.TEXT_SUCCESS_BOLD + "  Tailscale Serve:   ",
+      UI.Style.TEXT_NORMAL,
+      options.httpsUrl,
+      UI.Style.TEXT_SUCCESS + " (Recommended & Encrypted)",
+    )
+  }
   UI.println(UI.Style.TEXT_INFO_BOLD + "  Local access:      ", UI.Style.TEXT_NORMAL, endpoints.localhost)
 
   // Preferred Tailscale Endpoints
@@ -119,9 +178,14 @@ export async function printPairingInfo(options: { port?: number; password?: stri
     )
   }
 
-  // Target Pairing URL for QR code (prefer MagicDNS hostname over raw IP)
+  // Target Pairing URL for QR code: prefer the HTTPS Serve endpoint, then
+  // MagicDNS, raw Tailscale IP, first LAN address, localhost.
   const targetHostUrl =
-    endpoints.magicDns ?? endpoints.tailscale ?? (endpoints.lan && endpoints.lan[0]) ?? endpoints.localhost
+    options.httpsUrl ??
+    endpoints.magicDns ??
+    endpoints.tailscale ??
+    (endpoints.lan && endpoints.lan[0]) ??
+    endpoints.localhost
   const urlObj = new URL(targetHostUrl)
   if (password) {
     const token = Buffer.from(`opencode:${password}`).toString("base64")

@@ -4,7 +4,7 @@ import { errorMessage } from "@opencode-ai/tui/util/error"
 import { withNetworkOptions, resolveNetworkOptionsNoConfig, hasArg } from "@/cli/network"
 import { validateSession } from "../tui/validate-session"
 import { ServerAuth } from "@/server/auth"
-import { printPairingInfo } from "@/cli/qr"
+import { printPairingInfo, enableTailscaleServe, detectTailscaleServe } from "@/cli/qr"
 import { HostState } from "@/cli/host-state"
 import { Prompt } from "@/cli/prompt"
 import { resolveThreadDirectory } from "./tui"
@@ -14,6 +14,7 @@ import { ClientTracker } from "@opencode-ai/server/client-tracker"
 
 const DEFAULT_IDLE_EXIT_SECONDS = 30
 const DEFAULT_PORT = 4096
+const PAIRING_TIMEOUT_MS = 15_000
 
 export const HostCommand = cmd({
   command: "host [project]",
@@ -104,7 +105,18 @@ export const HostCommand = cmd({
     const record = await HostState.read()
     const suppliedPassword = args.password ?? Flag.OPENCODE_SERVER_PASSWORD ?? record?.password
 
-    const existing = await findExistingServer({ socket, network, record })
+    const explicitPort = hasArg("--port")
+    // Bind the documented default port explicitly: a busy port fails loudly
+    // instead of drifting to a random one that invalidates saved PWA links.
+    const bindPort = explicitPort ? network.port : network.port || DEFAULT_PORT
+    const probePort = explicitPort ? network.port : record?.port ?? bindPort
+    // The whole point of `host` is remote clients (phone PWA), so default the
+    // bind address to all interfaces instead of loopback. Password auth is
+    // always enabled (generated when not supplied).
+    const bindHostname =
+      hasArg("--hostname") || socket || network.hostname !== "127.0.0.1" ? network.hostname : "0.0.0.0"
+
+    const existing = await findExistingServer({ socket, port: probePort })
     const owned = !existing
 
     let port = existing?.port
@@ -122,8 +134,8 @@ export const HostCommand = cmd({
       }
       const { Server } = await import("../../server/server")
       const server = await Server.listen({
-        hostname: network.hostname,
-        port: network.port,
+        hostname: bindHostname,
+        port: socket ? network.port : bindPort,
         socket,
         mdns: network.mdns,
         mdnsDomain: network.mdnsDomain,
@@ -156,8 +168,16 @@ export const HostCommand = cmd({
     const url = socket ? socket : `http://127.0.0.1:${port}`
     const headers = ServerAuth.headers({ password, username: args.username })
 
+    // Publish real HTTPS through Tailscale Serve (tailnet-only) when starting
+    // the server; when attaching, surface it only if it is already up.
+    const httpsUrl = socket
+      ? undefined
+      : owned
+        ? enableTailscaleServe(bindPort)
+        : await detectTailscaleServe(bindPort)
+
     if (!args.noQr) {
-      await printPairingInfo({ port, socket, password })
+      await printPairingInfo({ port, socket, password, httpsUrl })
     }
 
     try {
@@ -183,10 +203,10 @@ export const HostCommand = cmd({
     if (owned) {
       UI.println(
         UI.Style.TEXT_INFO_BOLD +
-          "Scan the QR code above to pair your phone, then press Enter to start the TUI…" +
+          `Scan the QR code above to pair your phone, then press Enter to start the TUI (auto-starts in ${PAIRING_TIMEOUT_MS / 1000}s)…` +
           UI.Style.TEXT_NORMAL,
       )
-      await Prompt.waitForEnter()
+      await Prompt.waitForEnter(process.stdin, PAIRING_TIMEOUT_MS)
       ClientTracker.resume()
     }
 
@@ -240,7 +260,7 @@ export const HostCommand = cmd({
         ? `exits ${args.idleExit}s after the last client disconnects`
         : "stays running until you stop it with Ctrl-C"
     if (!args.noQr) {
-      await printPairingInfo({ port, socket, password })
+      await printPairingInfo({ port, socket, password, httpsUrl })
     }
     UI.println(
       UI.Style.TEXT_DIM + `TUI detached — server still up (${ClientTracker.count()} client(s) connected), ${idleNote}.`,
@@ -249,18 +269,12 @@ export const HostCommand = cmd({
   },
 })
 
-async function findExistingServer(input: {
-  socket?: string
-  network: ReturnType<typeof resolveNetworkOptionsNoConfig>
-  record?: HostState.HostRecord
-}) {
+async function findExistingServer(input: { socket?: string; port: number }) {
   if (input.socket) {
     const fs = await import("fs")
     if (fs.existsSync(input.socket)) return { socket: input.socket, port: 0 }
     return undefined
   }
-  const explicitPort = hasArg("--port") ? input.network.port : undefined
-  const port = explicitPort ?? input.record?.port ?? DEFAULT_PORT
-  if (await HostState.probe(`http://127.0.0.1:${port}`)) return { port }
+  if (await HostState.probe(`http://127.0.0.1:${input.port}`)) return { port: input.port }
   return undefined
 }
