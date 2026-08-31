@@ -160,7 +160,13 @@ describe("Core Harness Governance", () => {
     const implementerModel = router.selectModelForRole("implementer")
     expect(implementerModel).toBe("opencode-go/glm-5.3-flash")
 
-    const fallback = router.handleModelFailure("opencode-go/glm-5.3-flash", "429 Quota Exceeded")
+    expect(
+      router.isQuotaOrAvailabilityError(
+        "5 hour usage limit reached. It will reset in 4 hours 34 minutes. To continue using this model now, enable usage from your available balance",
+      ),
+    ).toBe(true)
+
+    const fallback = router.handleModelFailure("opencode-go/glm-5.3-flash", "5 hour usage limit reached")
     expect(fallback.substituted).toBe(true)
     expect(fallback.newModel).toBe("opencode-go/qwen3.8-max")
   })

@@ -7,7 +7,7 @@ import { ServerAuth } from "@/server/auth"
 import { printPairingInfo, enableTailscaleServe, detectTailscaleServe } from "@/cli/qr"
 import { resolveHostConfig } from "@/cli/host-config"
 import { HostState } from "@/cli/host-state"
-import { Prompt } from "@/cli/prompt"
+import { Pairing } from "@/cli/pairing"
 import { resolveThreadDirectory } from "./tui"
 import { Filesystem } from "@/util/filesystem"
 import { Flag } from "@opencode-ai/core/flag/flag"
@@ -15,7 +15,6 @@ import { ClientTracker } from "@opencode-ai/server/client-tracker"
 
 const DEFAULT_IDLE_EXIT_SECONDS = 30
 const DEFAULT_PORT = 4096
-const PAIRING_TIMEOUT_MS = 15_000
 
 export const HostCommand = cmd({
   command: "host [project]",
@@ -225,15 +224,10 @@ export const HostCommand = cmd({
     const onUnhandledRejection = (_error: unknown) => {}
     process.on("unhandledRejection", onUnhandledRejection)
 
-    if (owned) {
-      UI.println(
-        UI.Style.TEXT_INFO_BOLD +
-          `Scan the QR code above to pair your phone, then press Enter to start the TUI (auto-starts in ${PAIRING_TIMEOUT_MS / 1000}s)…` +
-          UI.Style.TEXT_NORMAL,
-      )
-      await Prompt.waitForEnter(process.stdin, PAIRING_TIMEOUT_MS)
-      ClientTracker.resume()
+    if (Pairing.shouldPauseForPairing({ qr: !args.noQr, owned })) {
+      await Pairing.pauseForPairing()
     }
+    if (owned) ClientTracker.resume()
 
     try {
       if (args.mini) {

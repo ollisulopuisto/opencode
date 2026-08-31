@@ -100,7 +100,7 @@ The network flags from `opencode serve` (`--port`, `--hostname`, `--mdns`, `--co
 
 #### Lifecycle
 
-- After starting a server, `opencode host` waits for you to press Enter before launching the TUI (it auto-starts after 15 seconds), so you have time to scan the QR code. The server stays alive while you pair; the idle timer below only starts once clients have connected.
+- Whenever it prints the QR code — whether it starts a server or attaches to one that is already running — `opencode host` waits for you to press Enter before launching the TUI (it auto-starts after 15 seconds), so you have time to scan the code. The server stays alive while you pair; the idle timer below only starts once clients have connected.
 - `host` binds to loopback (`127.0.0.1`) and publishes the phone pairing through Tailscale Serve over HTTPS when the `tailscale` CLI is available — access is then tailnet-only, so **no password is required**; the tailnet is the auth boundary and WireGuard encrypts all traffic. Without Tailscale, `host` binds to all interfaces (`0.0.0.0`) and enables password auth (generated when `OPENCODE_SERVER_PASSWORD` is not set). Pass `--hostname` or `--password` to override either default.
 - Exiting a TUI only detaches that client; the server keeps running for the other attached clients (TUI, PWA, scripts).
 - The process that started the server keeps it alive until the last client has been disconnected for `--idle-exit` seconds, then shuts everything down. Set `--idle-exit 0` to keep the server running until you stop it with `Ctrl-C`.
@@ -108,7 +108,11 @@ The network flags from `opencode serve` (`--port`, `--hostname`, `--mdns`, `--co
 
 #### Pairing over HTTPS
 
-`host` publishes the server through [Tailscale Serve](https://tailscale.com/kb/1242/tailscale-serve) when the `tailscale` CLI is available, so the phone pairs over real HTTPS (`https://<machine>.ts.net`) instead of plain HTTP — the QR code points at the HTTPS URL. Because the tunnel is tailnet-only, the server binds to loopback and runs **without a password** in this mode: every request already arrived over an authenticated, end-to-end-encrypted WireGuard tunnel. Set `OPENCODE_SERVER_PASSWORD` or pass `--password` if you still want HTTP basic auth on top (for example when other people share your tailnet). The serve config persists at the tailnet level; re-running `host` re-applies it idempotently. Pass `--no-qr` to skip pairing output entirely.
+`host` and `serve` publish the server through [Tailscale Serve](https://tailscale.com/kb/1242/tailscale-serve) when the `tailscale` CLI is available, so the phone pairs over real HTTPS (`https://<machine>.ts.net`) instead of plain HTTP — the QR code points at the HTTPS URL on port `4096` (or your configured `--port`). Because the tunnel is tailnet-only, the server binds to loopback and runs **without a password** in this mode: every request already arrived over an authenticated, end-to-end-encrypted WireGuard tunnel. Set `OPENCODE_SERVER_PASSWORD` or pass `--password` if you still want HTTP basic auth on top (for example when other people share your tailnet). The serve config persists at the tailnet level; re-running `host` or `serve` re-applies it idempotently. Pass `--no-qr` to skip pairing output entirely.
+
+:::tip
+**Persistent Remote Access:** When leaving your machine to continue working on your mobile PWA, pass `--idle-exit 0` to prevent the server from shutting down when the phone screen turns off, and ensure your host machine is prevented from sleeping (e.g. `caffeinate -d opencode host --idle-exit 0`).
+:::
 
 ---
 

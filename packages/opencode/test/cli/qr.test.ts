@@ -1,5 +1,12 @@
 import { describe, expect, test } from "bun:test"
-import { buildPairingUrl, detectNetworkEndpoints, printPairingInfo, tailscaleHttpsUrl } from "../../src/cli/qr"
+import {
+  buildPairingUrl,
+  detectNetworkEndpoints,
+  printPairingInfo,
+  tailscaleHttpsUrl,
+  enableTailscaleServe,
+  detectTailscaleServe,
+} from "../../src/cli/qr"
 import { base64Encode } from "@opencode-ai/core/util/encode"
 
 describe("CLI QR Pairing & Tailscale Detection", () => {
@@ -10,8 +17,17 @@ describe("CLI QR Pairing & Tailscale Detection", () => {
   })
 
   test("printPairingInfo runs without throwing on localhost and unix socket", async () => {
-    await expect(printPairingInfo({ port: 4096, password: "test-secret-pass" })).resolves.toBeUndefined()
-    await expect(printPairingInfo({ port: 4096, socket: "/tmp/test.sock" })).resolves.toBeUndefined()
+    expect(printPairingInfo({ port: 4096, password: "test-secret-pass" })).resolves.toBeUndefined()
+    expect(printPairingInfo({ port: 4096, socket: "/tmp/test.sock" })).resolves.toBeUndefined()
+  })
+
+  test("enableTailscaleServe and detectTailscaleServe return undefined for invalid port 0", async () => {
+    expect(enableTailscaleServe(0)).toBeUndefined()
+    expect(enableTailscaleServe(-1)).toBeUndefined()
+    expect(enableTailscaleServe(NaN)).toBeUndefined()
+    expect(detectTailscaleServe(0)).resolves.toBeUndefined()
+    expect(detectTailscaleServe(-1)).resolves.toBeUndefined()
+    expect(detectTailscaleServe(NaN)).resolves.toBeUndefined()
   })
 
   test("buildPairingUrl encodes directory and session into path and attaches auth token", () => {
@@ -32,6 +48,16 @@ describe("CLI QR Pairing & Tailscale Detection", () => {
       sessionID: "ses_12345",
     })
     expect(urlWithSession).toContain(`https://mac-studio.ts.net/${encodedDir}/session/ses_12345?auth_token=`)
+  })
+
+  test("keeps the session ID in one encoded route segment", () => {
+    const url = buildPairingUrl({
+      targetHostUrl: "https://mac-studio.ts.net",
+      directory: "/tmp/project",
+      sessionID: "ses/with-slash",
+    })
+
+    expect(new URL(url).pathname).toBe(`/${base64Encode("/tmp/project")}/session/ses%2Fwith-slash`)
   })
 })
 

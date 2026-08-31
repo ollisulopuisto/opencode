@@ -6,6 +6,8 @@ import { printPairingInfo, enableTailscaleServe, detectTailscaleServe } from "..
 import { resolveHostConfig } from "../host-config"
 import { UI } from "../ui"
 
+const DEFAULT_PORT = 4096
+
 export const ServeCommand = effectCmd({
   command: "serve",
   builder: (yargs) => withNetworkOptions(yargs),
@@ -17,11 +19,11 @@ export const ServeCommand = effectCmd({
     const { Server } = yield* Effect.promise(() => import("../../server/server"))
     const opts = yield* resolveNetworkOptions(args)
     const socket = opts.socket || undefined
-    const port = opts.port
+    const bindPort = socket ? opts.port : opts.port || DEFAULT_PORT
 
-    let serveUrl = socket ? undefined : enableTailscaleServe(port)
+    let serveUrl = socket ? undefined : enableTailscaleServe(bindPort)
     if (!serveUrl && !socket) {
-      serveUrl = yield* Effect.promise(() => detectTailscaleServe(port))
+      serveUrl = yield* Effect.promise(() => detectTailscaleServe(bindPort))
     }
 
     const security = resolveHostConfig({
@@ -43,9 +45,14 @@ export const ServeCommand = effectCmd({
     const server = yield* Effect.promise(() =>
       Server.listen({
         ...opts,
+        port: bindPort,
         hostname: security.hostname,
       }),
     )
+
+    if (!socket && server.port !== bindPort) {
+      serveUrl = enableTailscaleServe(server.port) ?? serveUrl
+    }
 
     yield* Effect.promise(() =>
       printPairingInfo({

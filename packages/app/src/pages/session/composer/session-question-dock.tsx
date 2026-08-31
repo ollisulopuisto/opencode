@@ -13,6 +13,7 @@ import { makeEventListener } from "@solid-primitives/event-listener"
 import { createResizeObserver } from "@solid-primitives/resize-observer"
 import { useServerSDK } from "@/context/server-sdk"
 import { ScopedKey } from "@/utils/server-scope"
+import { vibrate } from "@/utils/haptics"
 
 const cache = new Map<string, { tab: number; answers: QuestionAnswer[]; custom: string[]; customOn: boolean[] }>()
 
@@ -92,7 +93,7 @@ export const SessionQuestionDock: Component<{ request: QuestionRequest; onSubmit
   const question = createMemo(() => questions()[store.tab])
   const options = createMemo(() => question()?.options ?? [])
   const input = createMemo(() => store.custom[store.tab] ?? "")
-  const on = createMemo(() => store.customOn[store.tab] === true)
+  const on = createMemo(() => store.customOn[store.tab])
   const multi = createMemo(() => question()?.multiple === true)
   const count = createMemo(() => options().length + 1)
 
@@ -154,7 +155,7 @@ export const SessionQuestionDock: Component<{ request: QuestionRequest; onSubmit
 
   const pickFocus = (tab: number = store.tab) => {
     const list = questions()[tab]?.options ?? []
-    if (store.customOn[tab] === true) return list.length
+    if (store.customOn[tab]) return list.length
     return Math.max(
       0,
       list.findIndex((item) => store.answers[tab]?.includes(item.label) ?? false),
@@ -256,6 +257,7 @@ export const SessionQuestionDock: Component<{ request: QuestionRequest; onSubmit
 
   const reject = async () => {
     if (sending()) return
+    vibrate()
     await rejectMutation.mutateAsync()
   }
 
@@ -263,7 +265,7 @@ export const SessionQuestionDock: Component<{ request: QuestionRequest; onSubmit
 
   const answered = (i: number) => {
     if ((store.answers[i]?.length ?? 0) > 0) return true
-    return store.customOn[i] === true && (store.custom[i] ?? "").trim().length > 0
+    return store.customOn[i] && (store.custom[i] ?? "").trim().length > 0
   }
 
   const picked = (answer: string) => store.answers[store.tab]?.includes(answer) ?? false
@@ -284,6 +286,7 @@ export const SessionQuestionDock: Component<{ request: QuestionRequest; onSubmit
 
   const customToggle = () => {
     if (sending()) return
+    vibrate()
     setStore("focus", options().length)
 
     if (!multi()) {
@@ -309,6 +312,7 @@ export const SessionQuestionDock: Component<{ request: QuestionRequest; onSubmit
 
   const customOpen = () => {
     if (sending()) return
+    vibrate()
     setStore("focus", options().length)
     if (!on()) setStore("customOn", store.tab, true)
     setStore("editing", true)
@@ -368,6 +372,7 @@ export const SessionQuestionDock: Component<{ request: QuestionRequest; onSubmit
 
   const selectOption = (optIndex: number) => {
     if (sending()) return
+    vibrate()
 
     if (optIndex === options().length) {
       customOpen()

@@ -11,15 +11,19 @@ export type NetworkEndpoints = {
   localhost: string
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+}
+
 // The MagicDNS name of this machine (trailing dot stripped), from the
 // Tailscale CLI. Undefined when Tailscale is not installed or not up.
 export function tailscaleDnsName(): string | undefined {
   try {
     const status = spawnSync("tailscale", ["status", "--json"], { encoding: "utf8", timeout: 1000 })
     if (status.status !== 0 || !status.stdout) return undefined
-    const dnsName = (JSON.parse(status.stdout) as { Self?: { DNSName?: string } }).Self?.DNSName
-    if (!dnsName) return undefined
-    return dnsName.replace(/\.$/, "")
+    const value: unknown = JSON.parse(status.stdout)
+    if (!isRecord(value) || !isRecord(value.Self) || typeof value.Self.DNSName !== "string") return undefined
+    return value.Self.DNSName.replace(/\.$/, "")
   } catch {
     return undefined
   }
@@ -34,6 +38,7 @@ export function tailscaleHttpsUrl(dnsName: string): string {
 // undefined when Tailscale is unavailable. The serve config persists at the
 // tailnet level; re-running is idempotent.
 export function enableTailscaleServe(port: number): string | undefined {
+  if (!port || port <= 0 || isNaN(port)) return undefined
   try {
     const serve = spawnSync("tailscale", ["serve", "--bg", String(port)], { encoding: "utf8", timeout: 5000 })
     if (serve.status !== 0) return undefined
@@ -47,6 +52,7 @@ export function enableTailscaleServe(port: number): string | undefined {
 // Detects an already-configured Tailscale Serve endpoint for attach flows, so
 // re-pairing keeps the HTTPS URL without touching the tailnet config.
 export async function detectTailscaleServe(port: number, timeoutMs = 2000): Promise<string | undefined> {
+  if (!port || port <= 0 || isNaN(port)) return undefined
   const dnsName = tailscaleDnsName()
   if (!dnsName) return undefined
   const url = tailscaleHttpsUrl(dnsName)
@@ -58,7 +64,8 @@ export async function detectTailscaleServe(port: number, timeoutMs = 2000): Prom
   }
 }
 
-export function detectNetworkEndpoints(port: number): NetworkEndpoints {  const nets = networkInterfaces()
+export function detectNetworkEndpoints(port: number): NetworkEndpoints {
+  const nets = networkInterfaces()
   const lan: string[] = []
   let tailscale: string | undefined
   let magicDns: string | undefined
@@ -120,7 +127,9 @@ export function buildPairingUrl(options: {
   const urlObj = new URL(options.targetHostUrl)
   if (options.directory) {
     const encodedDir = base64Encode(options.directory)
-    urlObj.pathname = options.sessionID ? `/${encodedDir}/session/${options.sessionID}` : `/${encodedDir}`
+    urlObj.pathname = options.sessionID
+      ? `/${encodedDir}/session/${encodeURIComponent(options.sessionID)}`
+      : `/${encodedDir}`
   }
   const password = options.password ?? process.env.OPENCODE_SERVER_PASSWORD
   if (password) {
@@ -184,7 +193,9 @@ export async function printPairingInfo(options: {
           : UI.Style.TEXT_SUCCESS_BOLD + "  Tailscale access:  ",
         UI.Style.TEXT_NORMAL,
         endpoints.tailscale,
-        endpoints.magicDns ? UI.Style.TEXT_DIM + " (Encrypted Mesh)" : UI.Style.TEXT_SUCCESS + " (Recommended & Encrypted)",
+        endpoints.magicDns
+          ? UI.Style.TEXT_DIM + " (Encrypted Mesh)"
+          : UI.Style.TEXT_SUCCESS + " (Recommended & Encrypted)",
       )
     }
 
@@ -208,9 +219,7 @@ export async function printPairingInfo(options: {
       )
     } else if (endpoints.tailscale || endpoints.magicDns) {
       UI.empty()
-      UI.println(
-        UI.Style.TEXT_SUCCESS + "  🔒 End-to-end WireGuard encryption active via Tailscale mesh network.",
-      )
+      UI.println(UI.Style.TEXT_SUCCESS + "  🔒 End-to-end WireGuard encryption active via Tailscale mesh network.")
     }
   }
 
@@ -241,7 +250,7 @@ export async function printPairingInfo(options: {
         UI.println("  " + line)
       }
       UI.empty()
-    } catch (err) {
+    } catch {
       // If QR rendering fails, fallback gracefully
     }
   }

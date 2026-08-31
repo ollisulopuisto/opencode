@@ -8,6 +8,7 @@ export interface NotificationSettings {
   agent: boolean
   permissions: boolean
   errors: boolean
+  push: boolean
 }
 
 export interface SoundSettings {
@@ -64,16 +65,16 @@ export const oldInterfaceSunset = new Date(2026, 8, 14)
 const newLayoutDesignsUpgradeCutoff = "1.17.19"
 
 function compareVersions(a: string, b: string) {
-  const parse = (version: string) => {
+  const parse = (version: string): number[] | undefined => {
     const match = /^v?(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$/i.exec(version.trim())
-    if (!match) return
+    if (!match) return undefined
     return match.slice(1).map(Number)
   }
   const left = parse(a)
   const right = parse(b)
-  if (!left || !right) return
+  if (!left || !right) return undefined
   const index = left.findIndex((part, index) => part !== right[index])
-  return index === -1 ? 0 : left[index]! - right[index]!
+  return index === -1 ? 0 : left[index] - right[index]
 }
 
 export function isAppUpgrade(previous: string | undefined, current: string | undefined) {
@@ -95,7 +96,7 @@ export function hasExistingWebState(settings: Promise<string> | string | null, p
 }
 
 export function initialAgentVisibility(initialized: boolean | undefined, existing: boolean, previousVersion?: string) {
-  if (initialized === true) return
+  if (initialized === true) return undefined
   return existing || previousVersion !== undefined
 }
 
@@ -210,6 +211,7 @@ const defaultSettings: Settings = {
     agent: true,
     permissions: true,
     errors: false,
+    push: false,
   },
   sounds: {
     agentEnabled: true,
@@ -225,6 +227,7 @@ function withFallback<T>(read: () => T | undefined, fallback: T) {
   return createMemo(() => read() ?? fallback)
 }
 
+// oxlint-disable-next-line typescript-eslint/unbound-method -- context methods are stable callable values
 export const { use: useSettings, provider: SettingsProvider } = createSimpleContext({
   name: "Settings",
   gate: false,
@@ -511,6 +514,10 @@ export const { use: useSettings, provider: SettingsProvider } = createSimpleCont
         errors: withFallback(() => store.notifications?.errors, defaultSettings.notifications.errors),
         setErrors(value: boolean) {
           setStore("notifications", "errors", value)
+        },
+        push: withFallback(() => store.notifications?.push, defaultSettings.notifications.push),
+        setPush(value: boolean) {
+          setStore("notifications", "push", value)
         },
       },
       sounds: {

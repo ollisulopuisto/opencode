@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Calendar Versioning](https://calver.org/) (`vYY.MM.DD.N`).
 
+## [v26.08.31.15672] - 2026-08-31
+
+### Fixed
+- **Harness Model Router Usage Limit Recognition**: Updated `isQuotaOrAvailabilityError` in `packages/core/src/harness/model-router.ts` and `harness/src/model-router.ts` to detect sliding-window `"usage limit"`, `"limit reached"`, `"reset in"`, `"balance"`, and `"credits"` errors (matching OpenCode Go quota limit prompts), enabling automatic failover and cascading model substitution for subagents.
+- **Tailscale Serve Zero-Port Misconfiguration Guard**: Added strict validation in `enableTailscaleServe` and `detectTailscaleServe` to reject invalid/zero port arguments (`port <= 0 || isNaN(port)`), preventing Tailscale Serve from proxying to `http://127.0.0.1:0` and returning 502 empty responses to mobile PWA clients.
+- **Default Port Resolution in Headless & Web Serve**: Explicitly defaulted unconfigured network ports to `4096` in `opencode serve` and `opencode web` prior to initializing Tailscale Serve background proxying, ensuring remote HTTPS pairing routes accurately to the live listening socket.
+
 ## [v26.08.31.15671] - 2026-08-31
 
 ### Fixed

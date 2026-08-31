@@ -1,4 +1,5 @@
-import { Component, Show, createMemo, createResource } from "solid-js"
+import { Component, Show, createMemo, createResource, onCleanup, onMount } from "solid-js"
+import { createStore } from "solid-js/store"
 import { createMediaQuery } from "@solid-primitives/media"
 import { ButtonV2 } from "@opencode-ai/ui/v2/button-v2"
 import { SelectV2 } from "@opencode-ai/ui/v2/select-v2"
@@ -9,6 +10,7 @@ import { useLanguage } from "@/context/language"
 import { usePlatform } from "@/context/platform"
 import { useUpdaterAction } from "../updater-action"
 import { useSettings } from "@/context/settings"
+import { useServerSDK } from "@/context/server-sdk"
 import { ExternalLink } from "../external-link"
 import { SettingsListV2 } from "./parts/list"
 import { SettingsRowV2 } from "./parts/row"
@@ -26,6 +28,8 @@ import {
   type SoundSettingsController,
 } from "./general-controllers"
 import "./settings-v2.css"
+import { disablePushNotifications, enablePushNotifications } from "@/utils/push"
+import { showToast } from "@/utils/toast"
 
 const schemeOptions: ("system" | "light" | "dark")[] = ["system", "light", "dark"]
 const fontSettings = {
@@ -84,6 +88,86 @@ const PermissionScopeSetting: Component<{ controller: PermissionScopeController 
         />
       </div>
     </SettingsRowV2>
+  )
+}
+
+const PushNotificationSetting: Component = () => {
+  const language = useLanguage()
+  const platform = usePlatform()
+  const settings = useSettings()
+  const serverSDK = useServerSDK()
+  const [state, setState] = createStore({ busy: false })
+
+  const change = async (enabled: boolean) => {
+    if (state.busy) return
+    setState("busy", true)
+    try {
+      if (enabled) {
+        await enablePushNotifications({
+          api: serverSDK().currentApi.push,
+          serviceWorker: typeof navigator === "object" ? navigator.serviceWorker : undefined,
+          notification: typeof window === "object" && "Notification" in window ? window.Notification : undefined,
+        })
+      } else {
+        await disablePushNotifications({
+          api: serverSDK().currentApi.push,
+          serviceWorker: typeof navigator === "object" ? navigator.serviceWorker : undefined,
+        })
+      }
+      settings.notifications.setPush(enabled)
+    } catch {
+      showToast({ variant: "error", title: language.t("common.requestFailed") })
+    } finally {
+      setState("busy", false)
+    }
+  }
+
+  return (
+    <Show when={platform.platform === "web"}>
+      <SettingsRowV2
+        title={language.t("settings.general.notifications.push.title")}
+        description={language.t("settings.general.notifications.push.description")}
+      >
+        <div data-action="settings-notifications-push">
+          <Switch
+            checked={settings.notifications.push()}
+            disabled={state.busy}
+            onChange={(checked) => void change(checked)}
+          />
+        </div>
+      </SettingsRowV2>
+    </Show>
+  )
+}
+
+const InstallPwaSetting: Component = () => {
+  const language = useLanguage()
+  const platform = usePlatform()
+  const [state, setState] = createStore({ available: platform.pwa?.available() ?? false, busy: false })
+
+  onMount(() => {
+    const pwa = platform.pwa
+    if (!pwa) return
+    setState("available", pwa.available())
+    const unsubscribe = pwa.subscribe(() => setState("available", pwa.available()))
+    onCleanup(unsubscribe)
+  })
+
+  const install = async () => {
+    if (state.busy || !platform.pwa) return
+    setState("busy", true)
+    await platform.pwa.install()
+    setState({ busy: false, available: platform.pwa.available() })
+  }
+
+  return (
+    <Show when={platform.platform === "web" && state.available}>
+      <SettingsRowV2 title={language.t("pwa.install.title")} description={language.t("pwa.install.description")}>
+        <ButtonV2 size="normal" variant="neutral" disabled={state.busy} onClick={() => void install()}>
+          {language.t("pwa.install.action")}
+        </ButtonV2>
+      </SettingsRowV2>
+    </Show>
   )
 }
 
@@ -328,6 +412,7 @@ export const SettingsGeneralV2: Component<{
     <div class="settings-v2-section">
       <SettingsListV2>
         <LanguageSetting />
+        <InstallPwaSetting />
 
         <PermissionScopeSetting controller={permissionScope} />
 
@@ -482,6 +567,8 @@ export const SettingsGeneralV2: Component<{
             />
           </div>
         </SettingsRowV2>
+
+        <PushNotificationSetting />
       </SettingsListV2>
     </div>
   )

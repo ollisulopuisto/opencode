@@ -100,7 +100,7 @@ import { sessionHandlers } from "./handlers/session"
 import { syncHandlers } from "./handlers/sync"
 import { tuiHandlers } from "./handlers/tui"
 import { handlers } from "@opencode-ai/server/handlers"
-import { buildLocationServiceMap, LocationServiceMap } from "@opencode-ai/core/location-services"
+import { buildLocationServiceMap } from "@opencode-ai/core/location-services"
 import { layer as locationLayer } from "@opencode-ai/server/location"
 import { sessionLocationLayer } from "@opencode-ai/server/middleware/session-location"
 import { PtyEnvironment } from "@opencode-ai/server/pty-environment"
@@ -115,6 +115,7 @@ import { corsVaryFix } from "./middleware/cors-vary"
 import { errorLayer } from "./middleware/error"
 import { fenceLayer } from "./middleware/fence"
 import { schemaErrorLayer } from "./middleware/schema-error"
+import { WebPush } from "@opencode-ai/server/push"
 
 export const context = Context.makeUnsafe<unknown>(new Map())
 
@@ -281,6 +282,7 @@ const app = LayerNode.group([
   PtyTicket.node,
   SessionV2.node,
   SessionExecution.node,
+  WebPush.node,
 ])
 
 export function createRoutes(

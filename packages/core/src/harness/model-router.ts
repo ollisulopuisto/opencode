@@ -109,12 +109,21 @@ export class ModelRouter {
     return (
       msg.includes("quota") ||
       msg.includes("rate limit") ||
+      msg.includes("rate_limit") ||
       msg.includes("429") ||
       msg.includes("exhausted") ||
       msg.includes("503") ||
       msg.includes("service overloaded") ||
+      msg.includes("overloaded") ||
       msg.includes("temporarily unavailable") ||
-      msg.includes("capacity")
+      msg.includes("capacity") ||
+      msg.includes("usage limit") ||
+      msg.includes("usage_limit") ||
+      msg.includes("limit reached") ||
+      msg.includes("balance") ||
+      msg.includes("credits") ||
+      msg.includes("reset in") ||
+      msg.includes("context_length_exceeded")
     )
   }
 

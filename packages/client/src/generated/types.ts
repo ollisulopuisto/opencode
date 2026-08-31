@@ -21,6 +21,14 @@ export type InvalidRequestError = {
 export const isInvalidRequestError = (value: unknown): value is InvalidRequestError =>
   typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "InvalidRequestError"
 
+export type ServiceUnavailableError = {
+  readonly _tag: "ServiceUnavailableError"
+  readonly message: string
+  readonly service?: string | undefined
+}
+export const isServiceUnavailableError = (value: unknown): value is ServiceUnavailableError =>
+  typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "ServiceUnavailableError"
+
 export type InvalidCursorError = { readonly _tag: "InvalidCursorError"; readonly message: string }
 export const isInvalidCursorError = (value: unknown): value is InvalidCursorError =>
   typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "InvalidCursorError"
@@ -40,14 +48,6 @@ export type ConflictError = {
 }
 export const isConflictError = (value: unknown): value is ConflictError =>
   typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "ConflictError"
-
-export type ServiceUnavailableError = {
-  readonly _tag: "ServiceUnavailableError"
-  readonly message: string
-  readonly service?: string | undefined
-}
-export const isServiceUnavailableError = (value: unknown): value is ServiceUnavailableError =>
-  typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "ServiceUnavailableError"
 
 export type MessageNotFoundError = {
   readonly _tag: "MessageNotFoundError"
@@ -102,6 +102,32 @@ export const isProjectCopyError = (value: unknown): value is ProjectCopyError =>
   typeof value === "object" && value !== null && "name" in value && value["name"] === "ProjectCopyError"
 
 export type HealthGetOutput = { readonly healthy: true }
+
+export type PushPublicKeyOutput = { readonly publicKey: string }
+
+export type PushRegisterInput = {
+  readonly endpoint: {
+    readonly endpoint: string
+    readonly expirationTime?: number | "Infinity" | "-Infinity" | "NaN" | null
+    readonly keys: { readonly p256dh: string; readonly auth: string }
+  }["endpoint"]
+  readonly expirationTime?: {
+    readonly endpoint: string
+    readonly expirationTime?: number | "Infinity" | "-Infinity" | "NaN" | null
+    readonly keys: { readonly p256dh: string; readonly auth: string }
+  }["expirationTime"]
+  readonly keys: {
+    readonly endpoint: string
+    readonly expirationTime?: number | "Infinity" | "-Infinity" | "NaN" | null
+    readonly keys: { readonly p256dh: string; readonly auth: string }
+  }["keys"]
+}
+
+export type PushRegisterOutput = void
+
+export type PushRemoveInput = { readonly endpoint: { readonly endpoint: string }["endpoint"] }
+
+export type PushRemoveOutput = void
 
 export type LocationGetInput = {
   readonly location?: {

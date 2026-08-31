@@ -900,6 +900,11 @@ export const dict = {
   "sidebar.empty.description": "Откройте проект, чтобы начать",
 
   "app.name.desktop": "OpenCode Desktop",
+  "pwa.install.title": "Install OpenCode",
+  "pwa.install.description": "Add OpenCode to your device for quicker access",
+  "pwa.install.action": "Install",
+  "settings.general.notifications.push.title": "Push approvals",
+  "settings.general.notifications.push.description": "Receive approval prompts when OpenCode is not open",
   "settings.section.desktop": "Приложение",
   "settings.section.server": "Сервер",
   "settings.tab.general": "Основные",

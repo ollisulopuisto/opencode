@@ -4,6 +4,7 @@ import { Button } from "@opencode-ai/ui/button"
 import { DockPrompt } from "@opencode-ai/session-ui/dock-prompt"
 import { Icon } from "@opencode-ai/ui/icon"
 import { useLanguage } from "@/context/language"
+import { vibrate } from "@/utils/haptics"
 
 export function SessionPermissionDock(props: {
   request: PermissionRequest
@@ -11,6 +12,10 @@ export function SessionPermissionDock(props: {
   onDecide: (response: "once" | "always" | "reject") => void
 }) {
   const language = useLanguage()
+  const decide = (response: "once" | "always" | "reject") => {
+    vibrate()
+    props.onDecide(response)
+  }
 
   const toolDescription = () => {
     const key = `settings.permissions.tool.${props.request.permission}.description`
@@ -34,18 +39,13 @@ export function SessionPermissionDock(props: {
         <>
           <div />
           <div data-slot="permission-footer-actions">
-            <Button variant="ghost" size="normal" onClick={() => props.onDecide("reject")} disabled={props.responding}>
+            <Button variant="ghost" size="normal" onClick={() => decide("reject")} disabled={props.responding}>
               {language.t("ui.permission.deny")}
             </Button>
-            <Button
-              variant="secondary"
-              size="normal"
-              onClick={() => props.onDecide("always")}
-              disabled={props.responding}
-            >
+            <Button variant="secondary" size="normal" onClick={() => decide("always")} disabled={props.responding}>
               {language.t("ui.permission.allowAlways")}
             </Button>
-            <Button variant="primary" size="normal" onClick={() => props.onDecide("once")} disabled={props.responding}>
+            <Button variant="primary" size="normal" onClick={() => decide("once")} disabled={props.responding}>
               {language.t("ui.permission.allowOnce")}
             </Button>
           </div>

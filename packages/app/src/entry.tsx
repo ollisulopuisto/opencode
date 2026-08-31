@@ -9,6 +9,9 @@ import { createBrowserDraftStore } from "@/utils/draft-store"
 import { dict as en } from "@/i18n/en"
 import { dict as zh } from "@/i18n/zh"
 import { authFromToken } from "@/utils/server"
+import { persistPairedServer, scrubAuthTokenUrl } from "@/utils/server"
+import { installPushClickHapticListener } from "@/utils/haptics"
+import { buildClientManifest, createInstallPromptController, installClientManifest } from "@/utils/pwa"
 import pkg from "../package.json"
 import { ServerConnection } from "./context/server"
 
@@ -110,11 +113,22 @@ const getDefaultUrl = () => {
 }
 
 const clearAuthToken = () => {
-  const params = new URLSearchParams(location.search)
-  if (!params.has("auth_token")) return
-  params.delete("auth_token")
-  history.replaceState(null, "", location.pathname + (params.size ? `?${params}` : "") + location.hash)
+  const next = scrubAuthTokenUrl(location.href)
+  if (next === location.href) return
+  history.replaceState(null, "", next)
 }
+
+const registerServiceWorker = () => {
+  if (!("serviceWorker" in navigator)) return
+  installPushClickHapticListener(navigator.serviceWorker)
+  void navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => undefined)
+}
+
+const pwaInstall = createInstallPromptController(window)
+installClientManifest(
+  buildClientManifest({ pathname: location.pathname, search: location.search, hash: location.hash }),
+)
+registerServiceWorker()
 
 const platform: Platform = {
   platform: "web",
@@ -123,6 +137,11 @@ const platform: Platform = {
   openExternal,
   restart,
   notify,
+  pwa: {
+    available: () => pwaInstall.available(),
+    subscribe: (listener) => pwaInstall.subscribe(listener),
+    install: () => pwaInstall.install(),
+  },
   getDefaultServer: async () => {
     const stored = readDefaultServerUrl()
     return stored ? ServerConnection.Key.make(stored) : null
@@ -152,15 +171,31 @@ if (import.meta.env.VITE_SENTRY_DSN) {
 if (root instanceof HTMLElement) {
   void loadInitialLocale().then((locale) => {
     const auth = authFromToken(new URLSearchParams(location.search).get("auth_token"))
-    clearAuthToken()
+    const currentUrl = getCurrentUrl()
     const server: ServerConnection.Http = {
       type: "http",
       authToken: !!auth,
       http: {
-        url: getCurrentUrl(),
+        url: currentUrl,
         ...auth,
       },
     }
+    const browserStorage: Storage | undefined = (() => {
+      if (typeof localStorage === "undefined") return undefined
+      try {
+        return localStorage
+      } catch {
+        return undefined
+      }
+    })()
+    const persisted =
+      !auth ||
+      persistPairedServer(browserStorage, {
+        url: currentUrl,
+        username: auth.username,
+        password: auth.password,
+      })
+    if (persisted) clearAuthToken()
     render(
       () => (
         <PlatformProvider value={platform}>

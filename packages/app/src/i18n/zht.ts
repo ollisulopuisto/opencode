@@ -877,6 +877,11 @@ export const dict = {
   "sidebar.empty.description": "開啟專案以開始使用",
 
   "app.name.desktop": "OpenCode Desktop",
+  "pwa.install.title": "Install OpenCode",
+  "pwa.install.description": "Add OpenCode to your device for quicker access",
+  "pwa.install.action": "Install",
+  "settings.general.notifications.push.title": "Push approvals",
+  "settings.general.notifications.push.description": "Receive approval prompts when OpenCode is not open",
   "settings.section.desktop": "桌面",
   "settings.section.server": "伺服器",
   "settings.tab.general": "一般",

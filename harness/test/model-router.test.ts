@@ -11,6 +11,11 @@ describe("ModelRouter", () => {
     expect(ModelRouter.isQuotaOrAvailabilityError("HTTP 429: Rate limit exceeded")).toBe(true)
     expect(ModelRouter.isQuotaOrAvailabilityError("User has insufficient_quota on account")).toBe(true)
     expect(ModelRouter.isQuotaOrAvailabilityError("Out of credits/balance")).toBe(true)
+    expect(
+      ModelRouter.isQuotaOrAvailabilityError(
+        "5 hour usage limit reached. It will reset in 4 hours 34 minutes. To continue using this model now, enable usage from your available balance",
+      ),
+    ).toBe(true)
     expect(ModelRouter.isQuotaOrAvailabilityError("SyntaxError: Unexpected token")).toBe(false)
   })
 

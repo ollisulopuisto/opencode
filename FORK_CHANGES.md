@@ -45,7 +45,9 @@ This document provides a comprehensive summary of all feature additions, archite
 
 ### 2.3 Tailscale & MagicDNS Auto-Detection + QR Pairing
 * **Module:** [`packages/opencode/src/cli/qr.ts`](file:///Users/dst/Documents/koodi/opencode/packages/opencode/src/cli/qr.ts)
-* Automatically queries Tailscale IPv4 and MagicDNS endpoints upon `opencode serve`.
+* Automatically queries Tailscale IPv4, MagicDNS, and Tailscale Serve HTTPS endpoints upon `opencode serve`, `opencode host`, and `opencode web`.
+* Guards against invalid/zero port numbers in `enableTailscaleServe` and `detectTailscaleServe` to ensure Tailscale Serve never routes to port 0.
+* Defaults unconfigured network ports to `4096` and verifies background Tailscale Serve proxying matches the active server port.
 * Warns when listening on unencrypted local LAN networks.
 * Renders an authenticated QR code in interactive terminals for 1-second mobile phone camera pairing.
 
@@ -74,8 +76,10 @@ This document provides a comprehensive summary of all feature additions, archite
 ### Core & Tools
 * `packages/core/src/tool/clone.ts` — `repo_clone` tool implementation.
 * `packages/core/src/mcp/presets.ts` — Connector presets registry.
+* `packages/core/src/harness/model-router.ts` — Multi-tier model routing and quota failover cascade.
 * `packages/core/test/tool-clone.test.ts` — Unit tests for repository cloning.
 * `packages/core/test/mcp-presets.test.ts` — Unit tests for MCP presets.
+* `packages/core/test/harness/harness.test.ts` — Unit tests for autonomous harness and model router.
 
 ### CLI & Server
 * `packages/opencode/src/cli/cmd/clone.ts` — `opencode clone` command.

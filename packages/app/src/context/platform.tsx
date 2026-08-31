@@ -83,6 +83,13 @@ type PlatformBase = {
   /** Set the default server URL to use on app startup (platform-specific) */
   setDefaultServer?(url: ServerConnection.Key | null): Promise<void> | void
 
+  /** PWA install prompt controls (web only) */
+  pwa?: {
+    available: Accessor<boolean>
+    subscribe(listener: () => void): () => boolean
+    install(): Promise<boolean>
+  }
+
   /** Manage WSL sidecar servers (Electron on Windows only) */
   wslServers?: WslServersPlatform
 
@@ -135,6 +142,7 @@ export type Platform = PlatformBase &
 
 export type DisplayBackend = "auto" | "wayland"
 
+// oxlint-disable-next-line typescript-eslint/unbound-method -- context methods are stable callable values
 export const { use: usePlatform, provider: PlatformProvider } = createSimpleContext({
   name: "Platform",
   init: (props: { value: Platform }) => {

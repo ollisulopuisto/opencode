@@ -28,7 +28,9 @@ function getNetworkIPs() {
   return results
 }
 
-import { printPairingInfo } from "../qr"
+import { printPairingInfo, enableTailscaleServe, detectTailscaleServe } from "../qr"
+
+const DEFAULT_PORT = 4096
 
 export const WebCommand = effectCmd({
   command: "web",
@@ -45,14 +47,33 @@ export const WebCommand = effectCmd({
       UI.println(UI.Style.TEXT_SUCCESS_BOLD + `🔒 OPENCODE_SERVER_PASSWORD was not set. Generated password: ${generatedPassword}`)
     }
     const opts = yield* resolveNetworkOptions(args)
-    const server = yield* Effect.promise(() => Server.listen(opts))
+    const socket = opts.socket || undefined
+    const bindPort = socket ? opts.port : opts.port || DEFAULT_PORT
+
+    let serveUrl = socket ? undefined : enableTailscaleServe(bindPort)
+    if (!serveUrl && !socket) {
+      serveUrl = yield* Effect.promise(() => detectTailscaleServe(bindPort))
+    }
+
+    const server = yield* Effect.promise(() =>
+      Server.listen({
+        ...opts,
+        port: bindPort,
+      }),
+    )
     UI.empty()
     UI.println(UI.logo("  "))
+
+    if (!socket && server.port !== bindPort) {
+      serveUrl = enableTailscaleServe(server.port) ?? serveUrl
+    }
 
     yield* Effect.promise(() =>
       printPairingInfo({
         port: server.port,
+        socket: opts.socket,
         password: process.env.OPENCODE_SERVER_PASSWORD,
+        httpsUrl: serveUrl,
       }),
     )
 

@@ -120,6 +120,11 @@ export class ModelRouter {
       lower.includes("insufficient_quota") ||
       lower.includes("credits") ||
       lower.includes("balance") ||
+      lower.includes("usage limit") ||
+      lower.includes("usage_limit") ||
+      lower.includes("limit reached") ||
+      lower.includes("reset in") ||
+      lower.includes("capacity") ||
       lower.includes("overloaded") ||
       lower.includes("temporarily unavailable") ||
       lower.includes("503") ||

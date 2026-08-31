@@ -1,5 +1,10 @@
 import type {
   HealthGetOutput,
+  PushPublicKeyOutput,
+  PushRegisterInput,
+  PushRegisterOutput,
+  PushRemoveInput,
+  PushRemoveOutput,
   LocationGetInput,
   LocationGetOutput,
   AgentsListInput,
@@ -251,6 +256,43 @@ export function make(options: ClientOptions) {
       get: (requestOptions?: RequestOptions) =>
         request<HealthGetOutput>(
           { method: "GET", path: `/api/health`, successStatus: 200, declaredStatuses: [401, 400], empty: false },
+          requestOptions,
+        ),
+    },
+    push: {
+      publicKey: (requestOptions?: RequestOptions) =>
+        request<PushPublicKeyOutput>(
+          {
+            method: "GET",
+            path: `/api/push/public-key`,
+            successStatus: 200,
+            declaredStatuses: [503, 401, 400],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      register: (input: PushRegisterInput, requestOptions?: RequestOptions) =>
+        request<PushRegisterOutput>(
+          {
+            method: "POST",
+            path: `/api/push/subscription`,
+            body: { endpoint: input["endpoint"], expirationTime: input["expirationTime"], keys: input["keys"] },
+            successStatus: 204,
+            declaredStatuses: [400, 503, 401],
+            empty: true,
+          },
+          requestOptions,
+        ),
+      remove: (input: PushRemoveInput, requestOptions?: RequestOptions) =>
+        request<PushRemoveOutput>(
+          {
+            method: "DELETE",
+            path: `/api/push/subscription`,
+            body: { endpoint: input["endpoint"] },
+            successStatus: 204,
+            declaredStatuses: [400, 503, 401],
+            empty: true,
+          },
           requestOptions,
         ),
     },

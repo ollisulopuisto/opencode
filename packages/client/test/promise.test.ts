@@ -6,6 +6,7 @@ test("exposes every standard HTTP API group", () => {
 
   expect(Object.keys(client)).toEqual([
     "health",
+    "push",
     "location",
     "agents",
     "sessions",
@@ -24,6 +25,7 @@ test("exposes every standard HTTP API group", () => {
     "references",
     "projectCopies",
   ])
+  expect(Object.keys(client.push)).toEqual(["publicKey", "register", "remove"])
   expect(Object.keys(client.messages)).toEqual(["list"])
   expect(Object.keys(client.integrations)).toEqual([
     "list",
@@ -36,6 +38,34 @@ test("exposes every standard HTTP API group", () => {
   ])
   expect(Object.keys(client.files)).toEqual(["list", "find"])
   expect(Object.keys(client.ptys)).toEqual(["list", "create", "get", "update", "remove"])
+})
+
+test("push methods use the authenticated server endpoints", async () => {
+  const requests: Request[] = []
+  const client = OpenCode.make({
+    baseUrl: "https://server.example.test",
+    headers: { authorization: "Basic credentials" },
+    fetch: async (input, init) => {
+      requests.push(new Request(input, init))
+      if (requests.length === 1) return Response.json({ publicKey: "AQID" })
+      return new Response(null, { status: 204 })
+    },
+  })
+
+  expect(await client.push.publicKey()).toEqual({ publicKey: "AQID" })
+  await client.push.register({
+    endpoint: "https://push.example.test/subscription",
+    keys: { p256dh: "p256dh", auth: "auth" },
+  })
+  await client.push.remove({ endpoint: "https://push.example.test/subscription" })
+
+  expect(requests.map((request) => `${request.method} ${request.url}`)).toEqual([
+    "GET https://server.example.test/api/push/public-key",
+    "POST https://server.example.test/api/push/subscription",
+    "DELETE https://server.example.test/api/push/subscription",
+  ])
+  expect(requests[1]?.headers.get("authorization")).toBe("Basic credentials")
+  expect(await requests[1]?.json()).toMatchObject({ endpoint: "https://push.example.test/subscription" })
 })
 
 test("sessions.get returns the wire projection", async () => {

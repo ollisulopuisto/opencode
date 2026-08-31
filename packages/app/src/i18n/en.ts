@@ -893,6 +893,13 @@ export const dict = {
 
   "app.name.desktop": "OpenCode Desktop",
 
+  "pwa.install.title": "Install OpenCode",
+  "pwa.install.description": "Add OpenCode to your device for quicker access",
+  "pwa.install.action": "Install",
+
+  "settings.general.notifications.push.title": "Push approvals",
+  "settings.general.notifications.push.description": "Receive approval prompts when OpenCode is not open",
+
   "settings.section.desktop": "Desktop",
   "settings.section.server": "Server",
   "settings.tab.general": "General",
