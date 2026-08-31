@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Calendar Versioning](https://calver.org/) (`vYY.MM.DD.N`).
 
+## [v26.08.31.15667] - 2026-08-31
+
+### Fixed
+- **Directory Picker Multi-Level Browsing & Navigation**: Enabled cascading preloading of subdirectories, automatic expansion and loading on folder row selection/tap, and double-click navigation into folders in the Add/Open Project dialog (`DialogSelectDirectoryV2`).
+
 ## [v26.08.31.15666] - 2026-08-31
 
 ### Added

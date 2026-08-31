@@ -1,5 +1,5 @@
 import "@pierre/trees/web-components"
-import { FileTree } from "@pierre/trees"
+import { FileTree, type FileTreeDirectoryHandle } from "@pierre/trees"
 import { Dialog, DialogBody, DialogFooter, DialogHeader, DialogTitle } from "@opencode-ai/ui/v2/dialog-v2"
 import { ButtonV2 } from "@opencode-ai/ui/v2/button-v2"
 import { TextInputV2 } from "@opencode-ai/ui/v2/text-input-v2"
@@ -152,7 +152,7 @@ export function DialogSelectDirectoryV2(props: DialogSelectDirectoryV2Props) {
       batched.add(key)
       tree?.batch(policy.entries(key, nodes).map((item) => ({ type: "add", path: item })))
     }
-    if (!eager && advanceTreePreload(advanced, key)) {
+    if (advanceTreePreload(advanced, key)) {
       for (const directory of preloadTreeDirectories(key, nodes)) void load(directory, generation, true)
     }
     return true
@@ -246,6 +246,16 @@ export function DialogSelectDirectoryV2(props: DialogSelectDirectoryV2Props) {
     }
     document.addEventListener("pointerdown", closeSuggestions)
     onCleanup(() => document.removeEventListener("pointerdown", closeSuggestions))
+
+    const handleDblClick = () => {
+      const target = selected()
+      if (target && policy.action === "directory") {
+        void navigate(target)
+      }
+    }
+    container?.addEventListener("dblclick", handleDblClick)
+    onCleanup(() => container?.removeEventListener("dblclick", handleDblClick))
+
     tree = new FileTree({
       paths: [],
       flattenEmptyDirectories: false,
@@ -274,6 +284,17 @@ export function DialogSelectDirectoryV2(props: DialogSelectDirectoryV2Props) {
       onSelectionChange(paths) {
         const path = paths.at(-1)
         setSelected(path ? (policy.selection(root(), path) ?? "") : "")
+        if (path && path.endsWith("/")) {
+          void load(path, navigation).then((valid) => {
+            if (valid && tree) {
+              const item = tree.getItem(path)
+              if (item && item.isDirectory()) {
+                const dir = item as FileTreeDirectoryHandle
+                if (!dir.isExpanded()) dir.expand()
+              }
+            }
+          })
+        }
       },
     })
     if (!container) return
