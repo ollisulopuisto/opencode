@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Calendar Versioning](https://calver.org/) (`vYY.MM.DD.N`).
 
+## [v26.08.31.15668] - 2026-08-31
+
+### Added
+- **Attach Command Harness Option**: Added `--harness` option to `opencode attach` so sessions attached remotely inherit autonomous harness tracking.
+
+### Fixed
+- **Tailscale Zero-Auth Headless Server**: Updated `opencode serve` to use `resolveHostConfig` and detect active Tailscale Serve endpoints, running in passwordless mode over the tailnet WireGuard boundary without generating unsolicited random passwords.
+- **TUI Continue Graceful Fallback**: Removed dummy session ID placeholder during initial route initialization when using `-c` / `--continue`. When resuming in a project directory without prior sessions, the TUI now gracefully falls back to starting a fresh new session instead of throwing `Expected a string starting with "ses", got "dummy"`.
+
 ## [v26.08.31.15667] - 2026-08-31
 
 ### Fixed

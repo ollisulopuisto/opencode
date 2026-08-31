@@ -95,6 +95,11 @@ export const AttachCommand = cmd({
       .option("replay-limit", {
         type: "number",
         describe: "cap visible mini replay to the newest N messages",
+      })
+      .option("harness", {
+        type: "boolean",
+        describe: "enable autonomous harness supervisory state tracking and verification in the session",
+        default: false,
       }),
   handler: async (args) => {
     const targetUrl = await resolveAttachTarget(args)
@@ -139,6 +144,7 @@ export const AttachCommand = cmd({
         continue: args.continue,
         session: args.session,
         fork: args.fork,
+        harness: args.harness,
         replay: noReplay ? false : undefined,
         replayLimit: args.replayLimit,
       })

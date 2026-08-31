@@ -286,10 +286,10 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
                                 <ToastProvider>
                                   <RouteProvider
                                     initialRoute={
-                                      input.args.continue
+                                      input.args.sessionID
                                         ? {
                                             type: "session",
-                                            sessionID: "dummy",
+                                            sessionID: input.args.sessionID,
                                           }
                                         : undefined
                                     }
@@ -503,11 +503,11 @@ function App(props: { onSnapshot?: () => Promise<string[]>; pluginHost: TuiPlugi
   createEffect(() => {
     // When using -c, session list is loaded in blocking phase, so we can navigate at "partial"
     if (continued || sync.status === "loading" || !args.continue) return
+    continued = true
     const match = sync.data.session
       .toSorted((a, b) => b.time.updated - a.time.updated)
       .find((x) => x.parentID === undefined)?.id
     if (match) {
-      continued = true
       if (args.fork) {
         void sdk.client.session.fork({ sessionID: match }).then((result) => {
           if (result.data?.id) {
