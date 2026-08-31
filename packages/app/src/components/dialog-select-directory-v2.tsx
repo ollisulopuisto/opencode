@@ -14,7 +14,6 @@ import {
   activeTreeNavigation,
   advanceTreePreload,
   nextSuggestionIndex,
-  nextTreeScrollTop,
   pickerFileSearchQuery,
   pickerAbsoluteInput,
   pickerMode,
@@ -354,21 +353,14 @@ export function DialogSelectDirectoryV2(props: DialogSelectDirectoryV2Props) {
         <div
           class="directory-picker-v2-browser"
           ref={container}
-          onWheel={(event) => {
-            const scroller = tree
-              ?.getFileTreeContainer()
-              ?.shadowRoot?.querySelector<HTMLElement>("[data-file-tree-virtualized-scroll]")
-            if (!scroller) return
-            const next = nextTreeScrollTop(
-              scroller.scrollTop,
-              event.deltaY,
-              scroller.scrollHeight,
-              scroller.clientHeight,
-            )
-            if (next === scroller.scrollTop) return
-            event.preventDefault()
-            scroller.scrollTop = next
-            scroller.dispatchEvent(new Event("scroll"))
+          // The dialog's scroll-locking (solid-prevent-scroll via @corvu/dialog) cancels
+          // touchmove/wheel over this tree: its scrollability check walks parentElement
+          // and cannot see the shadow-root scroller. Stop these events here so native
+          // scrolling of the shadow scroller is preserved. Single touch only, so the
+          // dialog still cancels pinch-zoom.
+          on:wheel={(event: WheelEvent) => event.stopImmediatePropagation()}
+          on:touchmove={(event: TouchEvent) => {
+            if (event.touches.length === 1) event.stopImmediatePropagation()
           }}
         >
           <Show when={loading()}>

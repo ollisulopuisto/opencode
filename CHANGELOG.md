@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Calendar Versioning](https://calver.org/) (`vYY.MM.DD.N`).
 
+## [v26.08.31.15666] - 2026-08-31
+
+### Added
+- **QR Code Project & Session Route Encoding**: Encoded the active working directory and session ID into the QR pairing URL so scanning with a phone camera directly opens the matching project and session in the PWA / Web UI.
+
 ## [v26.08.31.15665] - 2026-08-31
 
 ### Fixed

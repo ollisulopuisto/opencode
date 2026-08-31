@@ -4,7 +4,6 @@ import {
   activeTreeNavigation,
   advanceTreePreload,
   nextSuggestionIndex,
-  nextTreeScrollTop,
   pickerTreeEntries,
   pickerSearchEntries,
   pickerFileSearchQuery,
@@ -287,12 +286,6 @@ test("limits background tasks and prioritizes newly requested work", async () =>
   await Promise.all(running)
   expect(started).toEqual(["first", "second", "opened", "preload"])
   expect(maximum).toBe(2)
-})
-
-test("clamps bridged tree wheel scrolling", () => {
-  expect(nextTreeScrollTop(100, 40, 500, 200)).toBe(140)
-  expect(nextTreeScrollTop(10, -40, 500, 200)).toBe(0)
-  expect(nextTreeScrollTop(290, 40, 500, 200)).toBe(300)
 })
 
 test("wraps autocomplete keyboard navigation", () => {

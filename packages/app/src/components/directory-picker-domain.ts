@@ -211,10 +211,6 @@ export function createPriorityTaskQueue<T>(concurrency: number) {
   return { schedule, promote }
 }
 
-export function nextTreeScrollTop(current: number, delta: number, scrollHeight: number, clientHeight: number) {
-  return Math.min(Math.max(0, scrollHeight - clientHeight), Math.max(0, current + delta))
-}
-
 export function nextSuggestionIndex(current: number, delta: -1 | 1, count: number) {
   if (count === 0) return -1
   return (current + delta + count) % count

@@ -1,6 +1,7 @@
 import QRCode from "qrcode"
 import { networkInterfaces } from "os"
 import { spawnSync } from "child_process"
+import { base64Encode } from "@opencode-ai/core/util/encode"
 import { UI } from "./ui"
 
 export type NetworkEndpoints = {
@@ -110,6 +111,25 @@ export function detectNetworkEndpoints(port: number): NetworkEndpoints {  const 
   }
 }
 
+export function buildPairingUrl(options: {
+  targetHostUrl: string
+  password?: string
+  directory?: string
+  sessionID?: string
+}): string {
+  const urlObj = new URL(options.targetHostUrl)
+  if (options.directory) {
+    const encodedDir = base64Encode(options.directory)
+    urlObj.pathname = options.sessionID ? `/${encodedDir}/session/${options.sessionID}` : `/${encodedDir}`
+  }
+  const password = options.password ?? process.env.OPENCODE_SERVER_PASSWORD
+  if (password) {
+    const token = Buffer.from(`opencode:${password}`).toString("base64")
+    urlObj.searchParams.set("auth_token", token)
+  }
+  return urlObj.toString()
+}
+
 export async function printPairingInfo(options: {
   port?: number
   password?: string
@@ -119,6 +139,8 @@ export async function printPairingInfo(options: {
   // Tailscale IP endpoints would not work, so only advertise localhost and
   // the HTTPS Serve URL.
   localOnly?: boolean
+  directory?: string
+  sessionID?: string
 }) {
   if (options.socket) {
     UI.println(UI.Style.TEXT_INFO_BOLD + "  Socket:            ", UI.Style.TEXT_NORMAL, `unix:${options.socket}`)
@@ -200,12 +222,12 @@ export async function printPairingInfo(options: {
     endpoints.tailscale ??
     (endpoints.lan && endpoints.lan[0]) ??
     endpoints.localhost
-  const urlObj = new URL(targetHostUrl)
-  if (password) {
-    const token = Buffer.from(`opencode:${password}`).toString("base64")
-    urlObj.searchParams.set("auth_token", token)
-  }
-  const pairingUrl = urlObj.toString()
+  const pairingUrl = buildPairingUrl({
+    targetHostUrl,
+    password,
+    directory: options.directory,
+    sessionID: options.sessionID,
+  })
 
   if (process.stdout.isTTY) {
     try {

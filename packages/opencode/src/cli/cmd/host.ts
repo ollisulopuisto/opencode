@@ -196,7 +196,15 @@ export const HostCommand = cmd({
     if (!owned && httpsUrl) localOnly = true
 
     if (!args.noQr) {
-      await printPairingInfo({ port, socket, password, httpsUrl, localOnly })
+      await printPairingInfo({
+        port,
+        socket,
+        password,
+        httpsUrl,
+        localOnly,
+        directory,
+        sessionID: args.session,
+      })
     }
 
     try {
@@ -278,7 +286,15 @@ export const HostCommand = cmd({
         ? `exits ${args.idleExit}s after the last client disconnects`
         : "stays running until you stop it with Ctrl-C"
     if (!args.noQr) {
-      await printPairingInfo({ port, socket, password, httpsUrl, localOnly })
+      await printPairingInfo({
+        port,
+        socket,
+        password,
+        httpsUrl,
+        localOnly,
+        directory,
+        sessionID: args.session,
+      })
     }
     UI.println(
       UI.Style.TEXT_DIM + `TUI detached — server still up (${ClientTracker.count()} client(s) connected), ${idleNote}.`,
