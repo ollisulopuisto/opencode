@@ -3,6 +3,9 @@ import {
   activeCommandRegistrations,
   addCommandRegistration,
   commandPaletteOptions,
+  formatKeybindParts,
+  matchKeybind,
+  parseKeybind,
   resolveKeybindOption,
   type CommandOption,
 } from "./command"
@@ -18,6 +21,34 @@ const paletteOptions: CommandOption[] = [
 describe("commandPaletteOptions", () => {
   test("keeps visible enabled commands", () => {
     expect(commandPaletteOptions(paletteOptions).map((option) => option.id)).toEqual(["settings.open", "session.undo"])
+  })
+})
+
+describe("slash search keybind", () => {
+  const fileSearch: CommandOption = {
+    id: "file.search",
+    title: "Open file",
+    keybind: "/",
+    hidden: true,
+  }
+
+  test("matches an unmodified slash keydown", () => {
+    expect(matchKeybind(parseKeybind(fileSearch.keybind!), new KeyboardEvent("keydown", { key: "/" }))).toBe(true)
+  })
+
+  test("does not match slash with modifiers", () => {
+    const keybinds = parseKeybind(fileSearch.keybind!)
+    expect(matchKeybind(keybinds, new KeyboardEvent("keydown", { key: "/", ctrlKey: true }))).toBe(false)
+    expect(matchKeybind(keybinds, new KeyboardEvent("keydown", { key: "/", metaKey: true }))).toBe(false)
+    expect(matchKeybind(keybinds, new KeyboardEvent("keydown", { key: "/", altKey: true }))).toBe(false)
+  })
+
+  test("stays out of the command palette", () => {
+    expect(commandPaletteOptions([fileSearch])).toEqual([])
+  })
+
+  test("displays as a plain slash", () => {
+    expect(formatKeybindParts(fileSearch.keybind!)).toEqual(["/"])
   })
 })
 

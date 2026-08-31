@@ -522,6 +522,13 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
         slash: "open",
         onSelect: openFile,
       }),
+      fileCommand({
+        id: "file.search",
+        title: language.t("command.file.open"),
+        keybind: "/",
+        hidden: true,
+        onSelect: openFile,
+      }),
       tab &&
         fileCommand({
           id: "tab.close",

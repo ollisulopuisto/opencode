@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Calendar Versioning](https://calver.org/) (`vYY.MM.DD.N`).
 
+## [v26.08.31.15665] - 2026-08-31
+
+### Fixed
+- **Prompt Input CSS Artifact**: Removed erroneous `empty:before:content-['\\200B']` pseudo-element rule from Session UI prompt input editor (`packages/session-ui/src/v2/components/prompt-input/index.tsx`), eliminating visible literal `\200B` text artifact in PWA.
+
 ## [v26.08.31.15664] - 2026-08-31
 
 ### Changed
