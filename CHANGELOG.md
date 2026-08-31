@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Calendar Versioning](https://calver.org/) (`vYY.MM.DD.N`).
 
+## [v26.08.31.15671] - 2026-08-31
+
+### Fixed
+- **Mobile Project Directory Tree Drill-down**: Fixed directory expansion in the project picker by ensuring batch cache clears on navigation, normalizing trailing slashes for nested expansion requests, adding touch double-tap support, increasing touch targets in CSS, and adding a dedicated "Browse Into" action button when inspecting subdirectories.
+
 ## [v26.08.31.15670] - 2026-08-31
 
 ### Changed

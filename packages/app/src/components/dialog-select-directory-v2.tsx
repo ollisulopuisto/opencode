@@ -171,6 +171,7 @@ export function DialogSelectDirectoryV2(props: DialogSelectDirectoryV2Props) {
     setInput(displayPickerPath(value, value, home()))
     listings.clear()
     advanced.clear()
+    batched.clear()
     tree?.resetPaths([])
     const valid = await load("", token)
     if (!activeTreeNavigation(token, navigation)) return
@@ -256,6 +257,20 @@ export function DialogSelectDirectoryV2(props: DialogSelectDirectoryV2Props) {
     container?.addEventListener("dblclick", handleDblClick)
     onCleanup(() => container?.removeEventListener("dblclick", handleDblClick))
 
+    let lastTap = 0
+    const handleTouchEnd = () => {
+      const now = Date.now()
+      if (now - lastTap < 350) {
+        const target = selected()
+        if (target && policy.action === "directory") {
+          void navigate(target)
+        }
+      }
+      lastTap = now
+    }
+    container?.addEventListener("touchend", handleTouchEnd)
+    onCleanup(() => container?.removeEventListener("touchend", handleTouchEnd))
+
     tree = new FileTree({
       paths: [],
       flattenEmptyDirectories: false,
@@ -279,15 +294,20 @@ export function DialogSelectDirectoryV2(props: DialogSelectDirectoryV2Props) {
         }
       `,
       onExpansionChange(change) {
-        if (change.expanded) void load(change.path, navigation)
+        if (change.expanded) {
+          const dirPath = change.path.endsWith("/") ? change.path : change.path + "/"
+          void load(dirPath, navigation)
+        }
       },
       onSelectionChange(paths) {
         const path = paths.at(-1)
-        setSelected(path ? (policy.selection(root(), path) ?? "") : "")
-        if (path && path.endsWith("/")) {
-          void load(path, navigation).then((valid) => {
+        const sel = path ? (policy.selection(root(), path) ?? "") : ""
+        setSelected(sel)
+        if (path) {
+          const dirPath = path.endsWith("/") ? path : path + "/"
+          void load(dirPath, navigation).then((valid) => {
             if (valid && tree) {
-              const item = tree.getItem(path)
+              const item = tree.getItem(dirPath) ?? tree.getItem(path)
               if (item && item.isDirectory()) {
                 const dir = item as FileTreeDirectoryHandle
                 if (!dir.isExpanded()) dir.expand()
@@ -397,6 +417,11 @@ export function DialogSelectDirectoryV2(props: DialogSelectDirectoryV2Props) {
         <ButtonV2 variant="neutral" onClick={() => dialog.close()}>
           {language.t("common.cancel")}
         </ButtonV2>
+        <Show when={selected() && selected() !== root() && policy.action === "directory"}>
+          <ButtonV2 variant="neutral" onClick={() => void navigate(selected())}>
+            {language.t("dialog.directory.action.openFolder") || "Browse Into"}
+          </ButtonV2>
+        </Show>
         <ButtonV2 variant="contrast" disabled={!policy.result(root(), selected(), rootValid())} onClick={resolve}>
           {action[policy.action]}
         </ButtonV2>

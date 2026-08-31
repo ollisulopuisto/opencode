@@ -80,8 +80,8 @@
   --trees-focus-ring-offset-override: 0px;
   --trees-border-color-override: var(--v2-border-border-base);
   --trees-font-family-override: var(--font-family-sans);
-  --trees-font-size-override: 12px;
-  --trees-item-height: 24px;
+  --trees-font-size-override: 13px;
+  --trees-item-height: 28px;
   --trees-border-radius-override: 4px;
 }
 
