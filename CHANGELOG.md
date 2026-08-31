@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Calendar Versioning](https://calver.org/) (`vYY.MM.DD.N`).
 
+## [v26.08.31.15669] - 2026-08-31
+
+### Fixed
+- **Mobile Model Selector & Submit Button Overlap**: Added responsive max-width truncation (`max-w-[130px] sm:max-w-[220px]`) to model selector trigger buttons in both legacy and V2 prompt inputs, wrapped controls row in `overflow-hidden`, and added `shrink-0` layout protection to the prompt submit button container to prevent model selector overflow from obscuring the send button on mobile devices.
+
 ## [v26.08.31.15668] - 2026-08-31
 
 ### Added

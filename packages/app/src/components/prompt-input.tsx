@@ -1667,7 +1667,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                           props.controls.agents.select(value)
                           restoreFocus()
                         }}
-                        class="capitalize max-w-[160px] text-text-base"
+                        class="capitalize max-w-[100px] sm:max-w-[160px] text-text-base"
                         valueClass="truncate text-13-regular text-text-base"
                         triggerStyle={control()}
                         triggerProps={{ "data-action": "prompt-agent" }}
@@ -1696,7 +1696,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                               as="div"
                               variant="ghost"
                               size="normal"
-                              class="min-w-0 max-w-[320px] text-13-regular text-text-base group"
+                              class="min-w-0 max-w-[130px] sm:max-w-[240px] text-13-regular text-text-base group"
                               style={control()}
                               onClick={() => {
                                 dialog.show(() => <DialogSelectModelUnpaid model={props.controls.model.selection} />)
@@ -1732,7 +1732,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                                 variant="ghost"
                                 size="normal"
                                 style={control()}
-                                class="min-w-0 max-w-[320px] text-13-regular text-text-base group"
+                                class="min-w-0 max-w-[130px] sm:max-w-[240px] text-13-regular text-text-base group"
                                 data-action="prompt-model"
                               >
                                 <Show when={props.controls.model.selection.current()?.provider?.id}>
