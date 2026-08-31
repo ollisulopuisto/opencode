@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Calendar Versioning](https://calver.org/) (`vYY.MM.DD.N`).
 
+## [v26.08.31.15670] - 2026-08-31
+
+### Changed
+- **Mobile Responsive Navigation**: Replaced crowded horizontal tab strip on mobile viewports (`sm:hidden`) with a dedicated sidebar/hamburger toggle button and clean session title display, preserving full multi-tab strip functionality on desktop screens.
+
 ## [v26.08.31.15669] - 2026-08-31
 
 ### Fixed

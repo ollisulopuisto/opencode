@@ -395,41 +395,70 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
                   />
                 </TooltipV2>
 
-                <TitlebarTabStrip
-                  tabs={tabsStore}
-                  currentTab={currentTab}
-                  forceTruncate={tabsAreOverflowing()}
-                  onOverflowChange={setTabsAreOverflowing}
-                  onNavigate={(tab, el) => {
-                    tabs.select(tab)
-                    el?.scrollIntoView({ behavior: "instant" })
-                  }}
-                  onClose={(tab) => {
-                    const index = tabsStore.findIndex((item) => tabKey(item) === tabKey(tab))
-                    if (index !== -1) tabsStoreActions.closeTab(index)
-                  }}
-                  onReorder={(keys) => tabsStoreActions.reorder(keys)}
-                />
                 <TooltipV2
                   placement="bottom"
-                  value={
-                    <>
-                      {language.t("command.session.new")}
-                      <KeybindV2 keys={newTabTooltipKeybind(command)} variant="neutral" />
-                    </>
-                  }
+                  value={language.t("command.sidebar.toggle")}
+                  class="shrink-0 sm:hidden"
                 >
                   <IconButtonV2
                     type="button"
                     variant="ghost-muted"
                     size="large"
-                    class="shrink-0"
-                    icon={<IconV2 name="plus" />}
-                    onClick={openNewTab}
-                    aria-label={language.t("command.session.new")}
+                    class="!w-9 shrink-0 sm:hidden"
+                    icon={<IconV2 name="sidebar" />}
+                    onClick={layout.sidebar.toggle}
+                    aria-label={language.t("command.sidebar.toggle")}
+                    aria-expanded={layout.sidebar.opened()}
                   />
                 </TooltipV2>
-                <div class="flex-1" />
+
+                <div class="flex sm:hidden flex-1 min-w-0 items-center px-1">
+                  <span class="truncate text-[13px] font-medium text-v2-text-text-base leading-5">
+                    {(() => {
+                      const tab = currentTab()
+                      if (!tab) return language.t("home.title")
+                      if (tab.type === "draft") return language.t("command.session.new")
+                      return tabs.info[tabKey(tab)]?.title ?? language.t("home.title")
+                    })()}
+                  </span>
+                </div>
+
+                <div class="hidden sm:flex items-center gap-1.5 overflow-hidden flex-1 min-w-0">
+                  <TitlebarTabStrip
+                    tabs={tabsStore}
+                    currentTab={currentTab}
+                    forceTruncate={tabsAreOverflowing()}
+                    onOverflowChange={setTabsAreOverflowing}
+                    onNavigate={(tab, el) => {
+                      tabs.select(tab)
+                      el?.scrollIntoView({ behavior: "instant" })
+                    }}
+                    onClose={(tab) => {
+                      const index = tabsStore.findIndex((item) => tabKey(item) === tabKey(tab))
+                      if (index !== -1) tabsStoreActions.closeTab(index)
+                    }}
+                    onReorder={(keys) => tabsStoreActions.reorder(keys)}
+                  />
+                  <TooltipV2
+                    placement="bottom"
+                    value={
+                      <>
+                        {language.t("command.session.new")}
+                        <KeybindV2 keys={newTabTooltipKeybind(command)} variant="neutral" />
+                      </>
+                    }
+                  >
+                    <IconButtonV2
+                      type="button"
+                      variant="ghost-muted"
+                      size="large"
+                      class="shrink-0"
+                      icon={<IconV2 name="plus" />}
+                      onClick={openNewTab}
+                      aria-label={language.t("command.session.new")}
+                    />
+                  </TooltipV2>
+                </div>
                 <TitlebarV2Right state={v2RightState()} />
               </div>
             )

@@ -378,6 +378,9 @@ export const { use: useTabs, provider: TabsProvider } = createSimpleContext({
       stateValue<T>(tab: Tab, name: string) {
         return memory.get<T>(tabKey(tab), name)
       },
+      info(tab: Tab) {
+        return info[tabKey(tab)]
+      },
     }
 
     return { ...actions, store, info, ready, recentReady }
